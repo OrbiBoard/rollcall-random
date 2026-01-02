@@ -27,7 +27,7 @@
     <div id="content"></div>
     <script>
       let running = false;
-      function getParam(k) { try { const u = new URL(window.location.href); return String(u.searchParams.get(k) || '').trim(); } catch { return ''; } }
+      function getParam(k) { try { const u = new URL(window.location.href); return String(u.searchParams.get(k) || '').trim(); } catch (e) { return ''; } }
       function showName(n, seat) {
         const el = document.getElementById('content');
         if (!n) { el.innerHTML = '<div class="placeholder"><i class="ri-shuffle-line"></i><span>未开始抽选</span></div>'; return; }
@@ -38,7 +38,7 @@
         const seg = [];
         seg.push('<div class="overlay">');
         
-        const join = (arr) => { try { const a = Array.isArray(arr) ? arr.filter(Boolean) : []; return a.slice(0,2).join('、'); } catch { return ''; } };
+        const join = (arr) => { try { const a = Array.isArray(arr) ? arr.filter(Boolean) : []; return a.slice(0,2).join('、'); } catch (e) { return ''; } };
         const f = join(nb.front);
         const l = join(nb.left);
         const r = join(nb.right);
@@ -75,7 +75,7 @@
             }
           });
         }
-      } catch {}
+      } catch (e) {}
     </script>
   </body>
   </html>

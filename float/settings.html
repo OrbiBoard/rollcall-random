@@ -47,10 +47,10 @@
     <div class="bg-icon"><i class="ri-shuffle-line"></i></div>
     <script>
       let channel = ''; let caller = ''; let initNoRepeat = '1'; let initRecentLimit = '20';
-      function readInit() { try { const u = new URL(window.location.href); channel=String(u.searchParams.get('channel')||''); caller=String(u.searchParams.get('caller')||''); initNoRepeat=String(u.searchParams.get('noRepeat')||'1'); initRecentLimit=String(u.searchParams.get('recentLimit')||'20'); } catch {} }
+      function readInit() { try { const u = new URL(window.location.href); channel=String(u.searchParams.get('channel')||''); caller=String(u.searchParams.get('caller')||''); initNoRepeat=String(u.searchParams.get('noRepeat')||'1'); initRecentLimit=String(u.searchParams.get('recentLimit')||'20'); } catch (e) {} }
       function initUi() { const chk = document.getElementById('chk-norepeat'); chk.checked = (initNoRepeat==='1'); const inp = document.getElementById('inp-recent-limit'); inp.value = initRecentLimit || '20'; }
-      async function save() { const v = document.getElementById('chk-norepeat').checked ? '1' : '0'; const k = Number(document.getElementById('inp-recent-limit').value || '20'); const recentLimit = Math.max(1, Math.min(100, Math.floor(Number.isFinite(k)?k:20))); try { await window.lowbarAPI?.emitEvent?.(channel, { type:'float.settings', noRepeat: v, recentLimit }); } catch {} }
-      async function resetPicked() { try { await window.lowbarAPI?.emitEvent?.(channel, { type:'float.settings', resetPicked: true }); } catch {} }
+      async function save() { const v = document.getElementById('chk-norepeat').checked ? '1' : '0'; const k = Number(document.getElementById('inp-recent-limit').value || '20'); const recentLimit = Math.max(1, Math.min(100, Math.floor(Number.isFinite(k)?k:20))); try { await window.lowbarAPI?.emitEvent?.(channel, { type:'float.settings', noRepeat: v, recentLimit }); } catch (e) {} }
+      async function resetPicked() { try { await window.lowbarAPI?.emitEvent?.(channel, { type:'float.settings', resetPicked: true }); } catch (e) {} }
       document.getElementById('btn-save').addEventListener('click', save);
       document.getElementById('btn-reset').addEventListener('click', resetPicked);
       readInit(); initUi();

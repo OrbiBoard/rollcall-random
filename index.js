@@ -16,7 +16,7 @@ const state = {
 };
 
 function emitUpdate(target, value) {
-  try { pluginApi.emit(state.eventChannel, { type: 'update', target, value }); } catch {}
+  try { pluginApi.emit(state.eventChannel, { type: 'update', target, value }); } catch (e) {}
 }
 
 async function ensureStudents() {
@@ -25,7 +25,7 @@ async function ensureStudents() {
     res = res?.result || res;
     const list = Array.isArray(res?.students) ? res.students : [];
     state.students = list.filter((s) => String((s && s.name) || '').trim() !== '');
-  } catch { state.students = []; }
+  } catch (e) { state.students = []; }
 }
 
 function pickOne() {
@@ -91,8 +91,8 @@ const functions = {
           const steps = basePool.length ? Math.min(5, basePool.length) : 0;
           for (let i = 0; i < steps; i++) { const j = Math.floor(Math.random() * basePool.length); seq.push(basePool[j] || finalName || ''); }
           let seat = null;
-          try { seat = await functions._getSeatingContext(finalName); } catch { seat = null; }
-          try { pluginApi.emit(state.eventChannel, { type: 'animate.pick', names: seq, final: finalName, stepMs: 40, seat }); } catch {}
+          try { seat = await functions._getSeatingContext(finalName); } catch (e) { seat = null; }
+          try { pluginApi.emit(state.eventChannel, { type: 'animate.pick', names: seq, final: finalName, stepMs: 40, seat }); } catch (e) {}
         }
       } else if (payload.type === 'left.click') {
         if (payload.id === 'openSettings') {
@@ -149,7 +149,7 @@ const functions = {
       const collectFront = () => { const arr = []; let r = ri - 1; while (r >= 0 && arr.length < 2) { if (!isAisleRow(r)) { const nm = occupantAt(r, ci); if (nm) arr.push(nm); } r--; } return arr; };
       const collectBack = () => { const arr = []; let r = ri + 1; while (r < rows.length && arr.length < 2) { if (!isAisleRow(r)) { const nm = occupantAt(r, ci); if (nm) arr.push(nm); } r++; } return arr; };
       return { found: true, pos: { row: rowNumber, col: colNumber }, neighbors: { left: collectLeft(), right: collectRight(), front: collectFront(), back: collectBack() } };
-    } catch { return { found: false }; }
+    } catch (e) { return { found: false }; }
   }
   
 };
