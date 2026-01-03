@@ -8,19 +8,66 @@
     <style>
       :root { --fg: #e6f0ff; --muted: #88a; }
       html, body { height: 100%; }
-      body { margin: 0; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--fg); }
+      body { margin: 0; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--fg); font-family: system-ui, sans-serif; }
       .name { font-size: 96px; font-weight: 800; letter-spacing: 6px; text-shadow: 0 8px 24px rgba(0,0,0,0.35); }
       .placeholder { font-size: 24px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
       .placeholder i { font-size: 24px; }
       .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
       .overlay .center { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
       .overlay .pos { font-size: 20px; color: rgba(230,240,255,0.85); text-shadow: 0 4px 12px rgba(0,0,0,0.35); }
-      .neighbor { position: absolute; z-index: 1; min-width: 180px; max-width: 280px; padding: 10px 14px; border-radius: 12px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; gap: 8px; color: #e6f0ff; font-weight: 600; }
-      .neighbor .label { color: var(--muted); font-weight: 700; }
-      .neighbor.top { top: 12%; left: 50%; transform: translateX(-50%); }
-      .neighbor.bottom { bottom: 12%; left: 50%; transform: translateX(-50%); }
-      .neighbor.left { left: 8%; top: 50%; transform: translateY(-50%); }
-      .neighbor.right { right: 8%; top: 50%; transform: translateY(-50%); }
+      
+      /* New Bottom-Left Neighbor Panel */
+      .neighbor-panel {
+        position: absolute;
+        left: 32px;
+        bottom: 32px;
+        z-index: 10;
+        background: rgba(16, 20, 32, 0.65);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 16px 20px;
+        color: var(--fg);
+        min-width: 180px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      .neighbor-panel table { width: 100%; border-collapse: collapse; }
+      .neighbor-panel td { padding: 6px 4px; font-size: 16px; line-height: 1.4; }
+      .neighbor-panel td.label { color: var(--muted); font-weight: 700; width: 32px; text-align: right; padding-right: 12px; white-space: nowrap; }
+      .neighbor-panel td.val { font-weight: 600; color: #fff; }
+      
+      .stats-panel {
+        position: absolute;
+        right: 32px;
+        bottom: 32px;
+        z-index: 10;
+        background: rgba(16, 20, 32, 0.65);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 16px 20px;
+        color: var(--fg);
+        min-width: 220px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .stats-item { display: flex; flex-direction: column; gap: 4px; }
+      .stats-label { font-size: 13px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+      .stats-value { font-size: 16px; font-weight: 600; color: #fff; }
+      .stats-sub { font-size: 13px; color: rgba(255,255,255,0.6); }
+      .history-list { display: flex; flex-direction: column; gap: 4px; }
+      .history-item { font-size: 14px; color: rgba(255,255,255,0.85); display: flex; justify-content: space-between; }
+      
+      @keyframes slideUp { 
+        from { opacity: 0; transform: translateY(20px); } 
+        to { opacity: 1; transform: translateY(0); } 
+      }
     </style>
   </head>
   <body>
@@ -28,35 +75,77 @@
     <script>
       let running = false;
       function getParam(k) { try { const u = new URL(window.location.href); return String(u.searchParams.get(k) || '').trim(); } catch (e) { return ''; } }
-      function showName(n, seat) {
+      function showName(n, seat, stats) {
         const el = document.getElementById('content');
         if (!n) { el.innerHTML = '<div class="placeholder"><i class="ri-shuffle-line"></i><span>未开始抽选</span></div>'; return; }
-        const found = seat && seat.found;
-        if (!found) { el.innerHTML = '<div class="name">'+n+'</div>'; return; }
-        const pos = seat.pos || { row: '', col: '' };
-        const nb = seat.neighbors || {};
-        const seg = [];
-        seg.push('<div class="overlay">');
         
-        const join = (arr) => { try { const a = Array.isArray(arr) ? arr.filter(Boolean) : []; return a.slice(0,2).join('、'); } catch (e) { return ''; } };
-        const f = join(nb.front);
-        const l = join(nb.left);
-        const r = join(nb.right);
-        const b = join(nb.back);
-        if (f) seg.push('<div class="neighbor top"><span class="label">前</span><span>'+f+'</span></div>');
-        if (l) seg.push('<div class="neighbor left"><span class="label">左</span><span>'+l+'</span></div>');
-        seg.push('<div class="center"><div class="name">'+n+'</div><div class="pos">第'+String(pos.row||'')+'排 第'+String(pos.col||'')+'列</div></div>');
-        if (r) seg.push('<div class="neighbor right"><span class="label">右</span><span>'+r+'</span></div>');
-        if (b) seg.push('<div class="neighbor bottom"><span class="label">后</span><span>'+b+'</span></div>');
-        seg.push('</div>');
-        const tpl = seg.join('');
-        el.innerHTML = tpl;
+        const found = seat && seat.found;
+        const pos = (found && seat.pos) || { row: '', col: '' };
+        
+        let html = '<div class="overlay">';
+        // Center Name
+        html += '<div class="center"><div class="name">' + n + '</div>';
+        if (found) {
+             html += '<div class="pos">第'+String(pos.row||'')+'排 第'+String(pos.col||'')+'列</div>';
+        }
+        html += '</div>'; // close center
+        
+        // Neighbor Panel (Bottom Left)
+        if (found) {
+            const nb = seat.neighbors || {};
+            const join = (arr) => { try { const a = Array.isArray(arr) ? arr.filter(Boolean) : []; return a.slice(0,2).join('、'); } catch (e) { return ''; } };
+            const f = join(nb.front);
+            const l = join(nb.left);
+            const r = join(nb.right);
+            const b = join(nb.back);
+            
+            if (f || l || r || b) {
+                html += '<div class="neighbor-panel"><table>';
+                if (f) html += '<tr><td class="label">前</td><td class="val">'+f+'</td></tr>';
+                if (b) html += '<tr><td class="label">后</td><td class="val">'+b+'</td></tr>';
+                if (l) html += '<tr><td class="label">左</td><td class="val">'+l+'</td></tr>';
+                if (r) html += '<tr><td class="label">右</td><td class="val">'+r+'</td></tr>';
+                html += '</table></div>';
+            }
+        }
+
+        // Stats Panel (Bottom Right)
+        if (stats) {
+            html += '<div class="stats-panel">';
+            
+            // Last 3 picks
+            if (Array.isArray(stats.last3) && stats.last3.length > 0) {
+                html += '<div class="stats-item">';
+                html += '<div class="stats-label">最近抽中</div>';
+                html += '<div class="history-list">';
+                stats.last3.forEach(ts => {
+                    const d = new Date(ts);
+                    const tStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    html += '<div class="history-item"><span>'+tStr+'</span></div>';
+                });
+                html += '</div></div>';
+            }
+
+            // Recent frequency
+            const count = stats.recentCount || 0;
+            const prob = typeof stats.probability === 'number' ? (stats.probability * 100).toFixed(1) + '%' : '0%';
+            
+            html += '<div class="stats-item">';
+            html += '<div class="stats-label">近5天统计</div>';
+            html += '<div class="stats-value">' + count + ' 次 <span class="stats-sub">(' + prob + ')</span></div>';
+            html += '</div>';
+
+            html += '</div>';
+        }
+        
+        html += '</div>'; // close overlay
+        el.innerHTML = html;
       }
       function renderInit() { const n = getParam('name'); showName(n); }
-      function runAnimate(seq, finalName, stepMs, seat) {
-        if (!Array.isArray(seq) || !seq.length) { showName(finalName); return; }
+      function runAnimate(seq, finalName, stepMs, seat, stats) {
+        if (!Array.isArray(seq) || !seq.length) { showName(finalName, seat, stats); return; }
         if (running) return; running = true; let i = 0; const step = Number(stepMs || 40);
-        const tick = () => { if (i < seq.length) { showName(String(seq[i]||'')); i++; setTimeout(tick, step); } else { showName(String(finalName||''), seat); running = false; } };
+        const tick = () => { if (i < seq.length) { showName(String(seq[i]||'')); i++; setTimeout(tick, step); } else { showName(String(finalName||''), seat, stats); running = false; } };
         tick();
       }
       renderInit();
@@ -71,7 +160,8 @@
               const finalName = String(payload.final || '');
               const stepMs = Number(payload.stepMs || 80);
               const seat = payload.seat || null;
-              runAnimate(seq, finalName, stepMs, seat);
+              const stats = payload.stats || null;
+              runAnimate(seq, finalName, stepMs, seat, stats);
             }
           });
         }

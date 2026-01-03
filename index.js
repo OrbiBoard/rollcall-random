@@ -1,6 +1,14 @@
 const path = require('path');
 const url = require('url');
-  
+const { app } = require('electron');
+// Try to locate store.js from host app
+let store = null;
+try {
+  const storePath = path.join(app.getAppPath(), 'src', 'main', 'store.js');
+  store = require(storePath);
+} catch (e) {
+  console.error('[rollcall] Failed to load store.js', e);
+}
 
 let pluginApi = null;
 const state = {
@@ -12,8 +20,63 @@ const state = {
   recent: [],
   recentLimit: 20,
   backgroundBase: '',
-  floatSettingsBase: ''
+  floatSettingsBase: '',
+  history: [] // { name: string, timestamp: number }
 };
+
+function loadHistory() {
+  if (!store) return;
+  try {
+    const data = store.get('rollcall-random', 'history');
+    if (Array.isArray(data)) {
+      state.history = data;
+    }
+  } catch (e) {
+    state.history = [];
+  }
+}
+
+function saveHistory(name) {
+  if (!store) return;
+  try {
+    const now = Date.now();
+    const fiveDaysAgo = now - 5 * 24 * 60 * 60 * 1000;
+    
+    // Add new record
+    state.history.push({ name, timestamp: now });
+    
+    // Prune records older than 5 days
+    state.history = state.history.filter(h => h.timestamp >= fiveDaysAgo);
+    
+    store.set('rollcall-random', 'history', state.history);
+  } catch (e) {
+    console.error('Failed to save history', e);
+  }
+}
+
+function getStats(name) {
+  const now = Date.now();
+  const fiveDaysAgo = now - 5 * 24 * 60 * 60 * 1000;
+  
+  // 1. Last 3 picks
+  const myPicks = state.history
+    .filter(h => h.name === name)
+    .sort((a, b) => b.timestamp - a.timestamp);
+  const last3 = myPicks.slice(0, 3).map(h => h.timestamp);
+  
+  // 2. Last 5 days stats
+  const recentPicks = state.history.filter(h => h.timestamp >= fiveDaysAgo);
+  const myRecentCount = recentPicks.filter(h => h.name === name).length;
+  const totalRecentCount = recentPicks.length;
+  const probability = totalRecentCount > 0 ? (myRecentCount / totalRecentCount) : 0;
+  
+  return {
+    last3,
+    recentCount: myRecentCount,
+    recentTotal: totalRecentCount,
+    probability
+  };
+}
 
 function emitUpdate(target, value) {
   try { pluginApi.emit(state.eventChannel, { type: 'update', target, value }); } catch (e) {}
@@ -31,14 +94,29 @@ async function ensureStudents() {
 function pickOne() {
   const names = state.students.map((s) => String(s.name || '').trim()).filter((n) => !!n);
   const unique = Array.from(new Set(names));
-  const exclude = state.noRepeat ? new Set(state.recent) : new Set();
-  let pool = state.noRepeat ? unique.filter((n) => !exclude.has(n)) : unique;
-  if (!pool.length) pool = unique;
+  
+  // 公平抽选逻辑：使用 state.picked 记录已抽选名单
+  // 当所有人都被抽过一轮后，自动重置（开启新一轮）
+  let pool = [];
+  if (state.noRepeat) {
+    pool = unique.filter((n) => !state.picked.has(n));
+    if (pool.length === 0) {
+      // 全部抽完，重置
+      state.picked.clear();
+      pool = unique;
+    }
+  } else {
+    pool = unique;
+  }
+
   const idx = Math.floor(Math.random() * pool.length);
   const name = pool[idx] || '';
+  
   if (name) {
     state.currentName = name;
     if (state.noRepeat) {
+      state.picked.add(name);
+      // 保持 recent 兼容性（虽然逻辑主要依赖 picked）
       state.recent.push(name);
       if (state.recent.length > state.recentLimit) state.recent.shift();
     }
@@ -156,6 +234,9 @@ const functions = {
 
 // 供预加载 quickAPI 调用的窗口控制函数
 
-const init = async (api) => { pluginApi = api; };
+const init = async (api) => { 
+  pluginApi = api; 
+  loadHistory();
+};
 
 module.exports = { name: '随机点名', version: '0.1.0', init, functions: { ...functions, getVariable: async (name) => { const k=String(name||''); if (k==='currentName') return String(state.currentName||''); return ''; }, listVariables: () => ['currentName'] } };
