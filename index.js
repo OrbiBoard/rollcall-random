@@ -12,7 +12,7 @@ try {
 
 let pluginApi = null;
 const state = {
-  eventChannel: 'rollcall.random',
+  eventChannel: 'rollcall-random',
   students: [],
   picked: new Set(),
   currentName: '',
@@ -84,7 +84,7 @@ function emitUpdate(target, value) {
 
 async function ensureStudents() {
   try {
-    let res = await pluginApi.call('profiles.students', 'getStudents');
+    let res = await pluginApi.call('profiles-students', 'getStudents');
     res = res?.result || res;
     const list = Array.isArray(res?.students) ? res.students : [];
     state.students = list.filter((s) => String((s && s.name) || '').trim() !== '');
@@ -133,12 +133,12 @@ const functions = {
       const floatFile = path.join(__dirname, 'float', 'settings.html');
       state.backgroundBase = url.pathToFileURL(bgFile).href;
       state.floatSettingsBase = url.pathToFileURL(floatFile).href;
-      const initBg = state.backgroundBase + '?channel=' + encodeURIComponent(state.eventChannel) + '&caller=rollcall.random&name=';
+      const initBg = state.backgroundBase + '?channel=' + encodeURIComponent(state.eventChannel) + '&caller=rollcall-random&name=';
       const params = {
         title: '随机点名',
         eventChannel: state.eventChannel,
         subscribeTopics: [state.eventChannel],
-        callerPluginId: 'rollcall.random',
+        callerPluginId: 'rollcall-random',
         floatingSizePercent: 48,
         floatingWidth: 520,
         floatingHeight: 360,
@@ -149,7 +149,7 @@ const functions = {
         backgroundTargets: { rollcall: state.backgroundBase },
         floatingBounds: 'left'
       };
-      await pluginApi.call('ui.lowbar', 'openTemplate', [params]);
+      await pluginApi.call('ui-lowbar', 'openTemplate', [params]);
       return true;
     } catch (e) { return { ok: false, error: e?.message || String(e) }; }
   },
@@ -178,7 +178,7 @@ const functions = {
           emitUpdate('floatingBounds', { width: 520, height: 360 });
           const u = new URL(state.floatSettingsBase);
           u.searchParams.set('channel', state.eventChannel);
-          u.searchParams.set('caller', 'rollcall.random');
+          u.searchParams.set('caller', 'rollcall-random');
           u.searchParams.set('noRepeat', state.noRepeat ? '1' : '0');
           u.searchParams.set('recentLimit', String(state.recentLimit || 20));
           emitUpdate('floatingUrl', u.href);
@@ -199,7 +199,7 @@ const functions = {
   },
   _getSeatingContext: async (finalName) => {
     try {
-      let res = await pluginApi.call('profiles.seating', 'getConfig');
+      let res = await pluginApi.call('profiles-seating', 'getConfig');
       res = res?.result || res;
       const cfg = res?.config || {};
       const rows = Array.isArray(cfg.rows) ? cfg.rows : [];
