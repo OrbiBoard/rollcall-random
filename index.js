@@ -1,14 +1,5 @@
 const path = require('path');
 const url = require('url');
-const { app } = require('electron');
-// Try to locate store.js from host app
-let store = null;
-try {
-  const storePath = path.join(app.getAppPath(), 'src', 'main', 'store.js');
-  store = require(storePath);
-} catch (e) {
-  console.error('[rollcall] Failed to load store.js', e);
-}
 
 let pluginApi = null;
 const state = {
@@ -25,9 +16,9 @@ const state = {
 };
 
 function loadHistory() {
-  if (!store) return;
+  if (!pluginApi) return;
   try {
-    const data = store.get('rollcall-random', 'history');
+    const data = pluginApi.store.get('history');
     if (Array.isArray(data)) {
       state.history = data;
     }
@@ -37,7 +28,7 @@ function loadHistory() {
 }
 
 function saveHistory(name) {
-  if (!store) return;
+  if (!pluginApi) return;
   try {
     const now = Date.now();
     const fiveDaysAgo = now - 5 * 24 * 60 * 60 * 1000;
@@ -48,7 +39,7 @@ function saveHistory(name) {
     // Prune records older than 5 days
     state.history = state.history.filter(h => h.timestamp >= fiveDaysAgo);
     
-    store.set('rollcall-random', 'history', state.history);
+    pluginApi.store.set('history', state.history);
   } catch (e) {
     console.error('Failed to save history', e);
   }
