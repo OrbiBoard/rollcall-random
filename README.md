@@ -1,11 +1,7 @@
-# rollcall-random 插件
+# 随机抽选 (rollcall-random)
 
-该仓库包含 OrbiBoard 主程序的 rollcall-random 插件源码。
+## 简介
+使用 UI模板-底栏应用 的随机点名插件，支持悬浮窗设置与快速调起。
 
-用法
-- 将本目录作为独立 Git 仓库管理。
-- 依赖请在 `plugin.json` 的 `npmDependencies` 或 `dependencies` 中声明，由主程序在运行时通过插件依赖管理安装。
-
-开发
-- 页面入口：`background/rollcall.html` 与 `float/settings.html`
-- 后端入口：`index.js`
+## 功能
+- **随机点名**: 启动随机抽选界面。
