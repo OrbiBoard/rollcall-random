@@ -7,24 +7,41 @@
     <link rel="stylesheet" href="../../../renderer/remixicon-local.css" />
     <link rel="stylesheet" href="../../../renderer/settings.css" />
     <style>
-      :root { --fg:#e6f0ff; --muted:#88a; --panel: rgba(255,255,255,0.06); }
-      body { margin: 0; padding: 16px; color: var(--fg); background: radial-gradient(1000px 400px at 75% 85%, rgba(65,95,130,0.35), rgba(12,20,28,0.6) 45%, rgba(8,14,22,0.85) 70%); }
+      :root {
+        --bg: #121621;
+        --fg: #ededed;
+        --muted: #94a3b8;
+        --accent: #238f4a;
+        --panel: rgba(255, 255, 255, 0.04);
+        --item-bg: rgba(255, 255, 255, 0.04);
+        --border: rgba(255, 255, 255, 0.12);
+        --accent-rgb: 35, 143, 74;
+        --bg-modal: #1b1f2a;
+      }
+      body { margin: 0; padding: 16px; color: var(--fg); background: var(--bg-modal); transition: background 0.3s, color 0.3s; }
       .title { font-size: 18px; font-weight: 600; display:flex; align-items:center; gap:8px; }
-      .card { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--panel); border: 1px solid rgba(255,255,255,0.08); }
+      .card { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); }
       .row { display:flex; align-items:center; justify-content: space-between; gap:12px; padding: 8px 0; }
-      .row label { display:flex; align-items:center; gap:8px; }
+      .row label { display:flex; align-items:center; gap:8px; cursor: pointer; }
       .row .hint { color: var(--muted); font-size: 12px; }
       .btns { display:flex; gap:8px; margin-top: 12px; }
-      button { padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.08); color: var(--fg); transition: all .15s ease; cursor: pointer; }
-      button.primary { background: rgba(125,200,255,0.25); border-color: rgba(125,200,255,0.35); }
-      button.danger { background: rgba(255,80,80,0.25); border-color: rgba(255,80,80,0.35); }
+      
+      button { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--item-bg); color: var(--fg); transition: all .15s ease; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+      
+      button.primary { background: var(--accent); border-color: transparent; color: #fff; }
+      button.danger { background: rgba(220, 38, 38, 0.15); color: #ef4444; border-color: rgba(220, 38, 38, 0.25); }
+      button.danger:hover { background: rgba(220, 38, 38, 0.25); }
+      
       button:hover { filter: brightness(1.08); transform: translateY(-1px); }
       button:active { filter: brightness(0.95); transform: translateY(0); }
-      button:focus-visible { outline: 2px solid rgba(125,200,255,0.7); outline-offset: 2px; }
+      button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      
       .field { display:flex; align-items:center; gap:8px; }
-      .field input[type="number"] { width: 88px; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); color: var(--fg); }
+      .field input[type="number"] { width: 88px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--item-bg); color: var(--fg); outline: none; }
+      .field input[type="number"]:focus { border-color: var(--accent); }
+      
       .muted { color: var(--muted); }
-      .bg-icon { position: fixed; right: 12px; bottom: 8px; font-size: 72px; color: rgba(255,255,255,0.08); pointer-events: none; }
+      .bg-icon { position: fixed; right: 12px; bottom: 8px; font-size: 72px; color: var(--fg); opacity: 0.05; pointer-events: none; }
     </style>
   </head>
   <body>
@@ -47,10 +64,85 @@
     <div class="bg-icon"><i class="ri-shuffle-line"></i></div>
     <script>
       let channel = ''; let caller = ''; let initNoRepeat = '1'; let initRecentLimit = '20';
+      
+      // 注入主题逻辑
+      window.applyTheme = (mode, color) => {
+        const root = document.documentElement;
+        const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        
+        const accent = color || '#238f4a';
+        root.style.setProperty('--accent', accent);
+        
+        const hex = accent.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        root.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
+        
+        if (isDark) {
+          root.style.setProperty('--bg', '#121621');
+          root.style.setProperty('--fg', '#ededed');
+          root.style.setProperty('--muted', '#94a3b8');
+          root.style.setProperty('--panel', 'rgba(255, 255, 255, 0.04)');
+          root.style.setProperty('--item-bg', 'rgba(255, 255, 255, 0.04)');
+          root.style.setProperty('--border', 'rgba(255, 255, 255, 0.12)');
+          root.style.setProperty('--bg-modal', '#1b1f2a');
+        } else {
+          root.style.setProperty('--bg', '#f3f4f6');
+          root.style.setProperty('--fg', '#1f2937');
+          root.style.setProperty('--muted', '#6b7280');
+          root.style.setProperty('--panel', '#ffffff');
+          root.style.setProperty('--item-bg', '#f9fafb');
+          root.style.setProperty('--border', '#e5e7eb');
+          root.style.setProperty('--bg-modal', '#ffffff');
+        }
+      };
+
+      (async () => {
+        try {
+          // 尝试获取主题配置
+          if (window.lowbarAPI?.configGet) {
+            const mode = await window.lowbarAPI.configGet('system', 'themeMode') || 'system';
+            const color = await window.lowbarAPI.configGet('system', 'themeColor') || '#238f4a';
+            window.applyTheme(mode, color);
+          }
+          
+          if (window.lowbarAPI?.onConfigChanged) {
+            window.lowbarAPI.onConfigChanged(({ scope, key, value }) => {
+              if (scope === 'system') {
+                // 重新获取或局部更新，这里简化处理，直接获取最新状态
+                // 实际应该存储状态
+              }
+            });
+          }
+        } catch(e) {}
+      })();
+
       function readInit() { try { const u = new URL(window.location.href); channel=String(u.searchParams.get('channel')||''); caller=String(u.searchParams.get('caller')||''); initNoRepeat=String(u.searchParams.get('noRepeat')||'1'); initRecentLimit=String(u.searchParams.get('recentLimit')||'20'); } catch (e) {} }
       function initUi() { const chk = document.getElementById('chk-norepeat'); chk.checked = (initNoRepeat==='1'); const inp = document.getElementById('inp-recent-limit'); inp.value = initRecentLimit || '20'; }
-      async function save() { const v = document.getElementById('chk-norepeat').checked ? '1' : '0'; const k = Number(document.getElementById('inp-recent-limit').value || '20'); const recentLimit = Math.max(1, Math.min(100, Math.floor(Number.isFinite(k)?k:20))); try { await window.lowbarAPI?.emitEvent?.(channel, { type:'float.settings', noRepeat: v, recentLimit }); } catch (e) {} }
-      async function resetPicked() { try { await window.lowbarAPI?.emitEvent?.(channel, { type:'float.settings', resetPicked: true }); } catch (e) {} }
+      async function save() { 
+        const v = document.getElementById('chk-norepeat').checked ? '1' : '0'; 
+        const k = Number(document.getElementById('inp-recent-limit').value || '20'); 
+        const recentLimit = Math.max(1, Math.min(100, Math.floor(Number.isFinite(k)?k:20))); 
+        const payload = { type:'float.settings', noRepeat: v, recentLimit };
+        try { 
+          if (caller && window.lowbarAPI?.pluginCall) {
+            await window.lowbarAPI.pluginCall(caller, 'onLowbarEvent', [payload]);
+          } else {
+            await window.lowbarAPI?.emitEvent?.(channel, payload); 
+          }
+        } catch (e) {} 
+      }
+      async function resetPicked() { 
+        const payload = { type:'float.settings', resetPicked: true };
+        try { 
+          if (caller && window.lowbarAPI?.pluginCall) {
+            await window.lowbarAPI.pluginCall(caller, 'onLowbarEvent', [payload]);
+          } else {
+            await window.lowbarAPI?.emitEvent?.(channel, payload); 
+          }
+        } catch (e) {} 
+      }
       document.getElementById('btn-save').addEventListener('click', save);
       document.getElementById('btn-reset').addEventListener('click', resetPicked);
       readInit(); initUi();

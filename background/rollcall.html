@@ -5,93 +5,338 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>随机点名</title>
     <link rel="stylesheet" href="../../../renderer/remixicon-local.css" />
-    <style>
-      :root { --fg: #e6f0ff; --muted: #88a; }
-      html, body { height: 100%; }
-      body { margin: 0; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--fg); font-family: system-ui, sans-serif; }
-      .name { font-size: 96px; font-weight: 800; letter-spacing: 6px; text-shadow: 0 8px 24px rgba(0,0,0,0.35); }
-      .placeholder { font-size: 24px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
-      .placeholder i { font-size: 24px; }
-      .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
-      .overlay .center { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-      .overlay .pos { font-size: 20px; color: rgba(230,240,255,0.85); text-shadow: 0 4px 12px rgba(0,0,0,0.35); }
-      
-      /* New Bottom-Left Neighbor Panel */
-      .neighbor-panel {
-        position: absolute;
-        left: 32px;
-        bottom: 32px;
-        z-index: 10;
-        background: rgba(16, 20, 32, 0.65);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 16px 20px;
-        color: var(--fg);
-        min-width: 180px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-        animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
-      }
-      .neighbor-panel table { width: 100%; border-collapse: collapse; }
-      .neighbor-panel td { padding: 6px 4px; font-size: 16px; line-height: 1.4; }
-      .neighbor-panel td.label { color: var(--muted); font-weight: 700; width: 32px; text-align: right; padding-right: 12px; white-space: nowrap; }
-      .neighbor-panel td.val { font-weight: 600; color: #fff; }
-      
-      .stats-panel {
-        position: absolute;
-        right: 32px;
-        bottom: 32px;
-        z-index: 10;
-        background: rgba(16, 20, 32, 0.65);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 16px 20px;
-        color: var(--fg);
-        min-width: 220px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-        animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-      .stats-item { display: flex; flex-direction: column; gap: 4px; }
-      .stats-label { font-size: 13px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-      .stats-value { font-size: 16px; font-weight: 600; color: #fff; }
-      .stats-sub { font-size: 13px; color: rgba(255,255,255,0.6); }
-      .history-list { display: flex; flex-direction: column; gap: 4px; }
-      .history-item { font-size: 14px; color: rgba(255,255,255,0.85); display: flex; justify-content: space-between; }
-      
-      @keyframes slideUp { 
-        from { opacity: 0; transform: translateY(20px); } 
-        to { opacity: 1; transform: translateY(0); } 
-      }
-    </style>
+  <style>
+    :root {
+      --bg: #121621;
+      --fg: #ededed;
+      --muted: #94a3b8;
+      --accent: #238f4a;
+      --panel: rgba(255, 255, 255, 0.04);
+      --item-bg: rgba(255, 255, 255, 0.04);
+      --border: rgba(255, 255, 255, 0.12);
+      --accent-rgb: 35, 143, 74;
+    }
+
+    body {
+      margin: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "Microsoft YaHei", sans-serif;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    
+    .name {
+      font-size: 140px;
+      font-weight: 800;
+      color: var(--fg);
+      text-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      z-index: 10;
+      letter-spacing: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .placeholder { 
+      font-size: 24px; 
+      color: var(--muted); 
+      display: flex; 
+      align-items: center; 
+      gap: 8px; 
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .placeholder i { font-size: 24px; }
+    .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+    .overlay .center { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .overlay .pos { font-size: 20px; color: var(--fg); opacity: 0.85; text-shadow: 0 4px 12px rgba(0,0,0,0.35); }
+    
+    /* Neighbor Panel */
+    .neighbor-panel {
+      position: absolute;
+      left: 32px;
+      bottom: 32px;
+      z-index: 10;
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 20px;
+      color: var(--fg);
+      min-width: 180px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .neighbor-panel table { width: 100%; border-collapse: collapse; }
+    .neighbor-panel td { padding: 6px 4px; font-size: 16px; line-height: 1.4; }
+    .neighbor-panel td.label { color: var(--muted); font-weight: 700; width: 32px; text-align: right; padding-right: 12px; white-space: nowrap; }
+    .neighbor-panel td.val { font-weight: 600; color: var(--fg); }
+    
+    .stats-panel {
+      position: absolute;
+      right: 32px;
+      bottom: 32px;
+      z-index: 10;
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 20px;
+      color: var(--fg);
+      min-width: 220px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .stats-item { display: flex; flex-direction: column; gap: 4px; }
+    .stats-label { font-size: 13px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stats-value { font-size: 16px; font-weight: 600; color: var(--fg); }
+    .stats-sub { font-size: 13px; color: var(--muted); opacity: 0.8; }
+    .history-list { display: flex; flex-direction: column; gap: 4px; }
+    .history-item { font-size: 14px; color: var(--fg); opacity: 0.85; display: flex; justify-content: space-between; }
+    
+    @keyframes slideUp { 
+      from { opacity: 0; transform: translateY(20px); } 
+      to { opacity: 1; transform: translateY(0); } 
+    }
+    
+    .counter-panel {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 8px 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      transition: opacity 0.3s;
+    }
+    .counter-panel .btn {
+      font-size: 24px;
+      font-weight: 300;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      user-select: none;
+      opacity: 0.7;
+      color: var(--fg);
+      transition: opacity 0.2s;
+    }
+    .counter-panel .btn:hover { opacity: 1; background: var(--border); border-radius: 50%; }
+    .counter-panel .count {
+      font-size: 24px;
+      font-weight: 700;
+      min-width: 24px;
+      text-align: center;
+      color: var(--fg);
+      font-variant-numeric: tabular-nums;
+    }
+    .name-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 48px; max-width: 85vw; }
+    .name-item { font-size: 64px; font-weight: 800; letter-spacing: 4px; text-shadow: 0 8px 24px rgba(0,0,0,0.35); color: var(--fg); }
+
+    /* 动画背景效果 */
+    .bg-effect {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 0;
+      opacity: 0.1;
+      background-image: 
+        radial-gradient(circle at 20% 30%, var(--accent) 0%, transparent 20%),
+        radial-gradient(circle at 80% 70%, var(--accent) 0%, transparent 20%);
+      filter: blur(60px);
+    }
+  </style>
   </head>
   <body>
     <div id="content"></div>
+    <div class="counter-panel">
+      <div class="btn" onclick="updateCount(-1)"><i class="ri-subtract-line"></i></div>
+      <div class="count" id="count-val">1</div>
+      <div class="btn" onclick="updateCount(1)"><i class="ri-add-line"></i></div>
+    </div>
+    
+    <div class="controls" style="top: 20px; right: 20px;">
+        <!-- Placeholder for close button if needed, but usually handled by parent -->
+    </div>
+
     <script>
+      // 注入主题逻辑
+      window.applyTheme = (mode, color) => {
+        const root = document.documentElement;
+        const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        
+        const accent = color || '#238f4a';
+        root.style.setProperty('--accent', accent);
+        
+        const hex = accent.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        root.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
+        
+        if (isDark) {
+          root.style.setProperty('--bg', '#121621');
+          root.style.setProperty('--fg', '#ededed');
+          root.style.setProperty('--muted', '#94a3b8');
+          root.style.setProperty('--panel', 'rgba(255, 255, 255, 0.04)');
+          root.style.setProperty('--item-bg', 'rgba(255, 255, 255, 0.04)');
+          root.style.setProperty('--border', 'rgba(255, 255, 255, 0.12)');
+        } else {
+          root.style.setProperty('--bg', '#f3f4f6');
+          root.style.setProperty('--fg', '#1f2937');
+          root.style.setProperty('--muted', '#6b7280');
+          root.style.setProperty('--panel', '#ffffff');
+          root.style.setProperty('--item-bg', '#f9fafb');
+          root.style.setProperty('--border', '#e5e7eb');
+        }
+      };
+
+      (async () => {
+        try {
+          // 获取初始配置
+          const cfg = await window.lowbarAPI?.configGetAll?.('system') || {}; // rollcall uses lowbarAPI? check script
+          // If lowbarAPI doesn't support configGetAll directly, we might need another way or assume defaults.
+          // Based on previous files, plugins use pluginAPI or settingsAPI. 
+          // But rollcall seems to be a "lowbar plugin" or similar context? 
+          // The script below uses lowbarAPI. Let's try to use lowbarAPI for config if available, 
+          // or just default to system theme if we can't fetch.
+          // Actually, let's just listen for events if possible, or try to fetch from somewhere.
+          // Since it's a background page, maybe it has access to node integration or specific APIs?
+          // The previous code had `window.lowbarAPI`. Let's stick to that.
+          
+          // However, lowbarAPI might not expose config directly. 
+          // Let's assume for now we can't easily fetch config unless we add it to lowbarAPI preload.
+          // But wait, we added `onConfigChanged` to `ui-lowbar/preload.js` earlier! 
+          // Is `rollcall-random` using `ui-lowbar`'s preload? 
+          // Usually plugins have their own preload or share one. 
+          // If this is a background window opened by lowbar, it might. 
+          // Let's check if we can access `window.lowbarAPI.configGet` (we added it to ui-lowbar preload).
+          
+          if (window.lowbarAPI?.configGet) {
+             const mode = await window.lowbarAPI.configGet('system', 'themeMode') || 'system';
+             const color = await window.lowbarAPI.configGet('system', 'themeColor') || '#238f4a';
+             window.applyTheme(mode, color);
+          }
+          
+          if (window.lowbarAPI?.onConfigChanged) {
+             window.lowbarAPI.onConfigChanged(({ scope, key, value }) => {
+                if (scope === 'system') {
+                   // We need current state to apply updates correctly (e.g. if only color changes, mode should stay)
+                   // For simplicity, we can just fetch all again or store locally.
+                   // Let's store locally in closure variables if we were inside one, but here we are in async IIFE.
+                   // We can re-fetch or just update what changed.
+                   // But applyTheme takes (mode, color). 
+                   // Let's just re-fetch to be safe or improve applyTheme to handle partial updates?
+                   // Better: store current state globally.
+                }
+             });
+          }
+        } catch(e) {}
+      })();
+      
+      // Global theme state
+      let currentThemeMode = 'system';
+      let currentThemeColor = '#238f4a';
+      
+      async function initTheme() {
+         try {
+            if (window.lowbarAPI?.configGet) {
+               currentThemeMode = await window.lowbarAPI.configGet('system', 'themeMode') || 'system';
+               currentThemeColor = await window.lowbarAPI.configGet('system', 'themeColor') || '#238f4a';
+               window.applyTheme(currentThemeMode, currentThemeColor);
+            }
+            
+            if (window.lowbarAPI?.onConfigChanged) {
+               window.lowbarAPI.onConfigChanged(({ scope, key, value }) => {
+                  if (scope === 'system') {
+                     if (key === 'themeMode') currentThemeMode = value;
+                     if (key === 'themeColor') currentThemeColor = value;
+                     window.applyTheme(currentThemeMode, currentThemeColor);
+                  }
+               });
+            }
+            
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+              if (currentThemeMode === 'system') window.applyTheme('system', currentThemeColor);
+            });
+         } catch(e) { console.error(e); }
+      }
+      initTheme();
+
       let running = false;
+      let currentCount = 1;
+      let maxCount = 50;
+      function updateCount(d) {
+        const v = currentCount + d;
+        if (v < 1 || v > maxCount) return;
+        currentCount = v;
+        document.getElementById('count-val').innerText = v;
+        const ch = getParam('channel');
+        const caller = getParam('caller');
+        if (window.lowbarAPI) {
+           if (caller && window.lowbarAPI.pluginCall) {
+             window.lowbarAPI.pluginCall(caller, 'onLowbarEvent', [{ type: 'config.count', count: v }]);
+           } else if (ch && window.lowbarAPI.emitEvent) {
+             window.lowbarAPI.emitEvent(ch, { type: 'config.count', count: v });
+           } else if (ch && window.lowbarAPI.emit) {
+             window.lowbarAPI.emit(ch, { type: 'config.count', count: v });
+           }
+        }
+      }
       function getParam(k) { try { const u = new URL(window.location.href); return String(u.searchParams.get(k) || '').trim(); } catch (e) { return ''; } }
       function showName(n, seat, stats) {
         const el = document.getElementById('content');
-        if (!n) { el.innerHTML = '<div class="placeholder"><i class="ri-shuffle-line"></i><span>未开始抽选</span></div>'; return; }
+        if (!n || (Array.isArray(n) && n.length === 0)) { el.innerHTML = '<div class="placeholder"><i class="ri-shuffle-line"></i><span>未开始抽选</span></div>'; return; }
         
-        const found = seat && seat.found;
-        const pos = (found && seat.pos) || { row: '', col: '' };
+        const names = Array.isArray(n) ? n : [n];
+        const isMulti = names.length > 1;
         
         let html = '<div class="overlay">';
         // Center Name
-        html += '<div class="center"><div class="name">' + n + '</div>';
-        if (found) {
-             html += '<div class="pos">第'+String(pos.row||'')+'排 第'+String(pos.col||'')+'列</div>';
+        if (isMulti) {
+            html += '<div class="center"><div class="name-grid">';
+            names.forEach(nm => {
+                html += '<div class="name-item">' + nm + '</div>';
+            });
+            html += '</div></div>';
+        } else {
+            html += '<div class="center"><div class="name">' + names[0] + '</div>';
+            if (seat && seat.found) {
+                 const pos = seat.pos || { row: '', col: '' };
+                 html += '<div class="pos">第'+String(pos.row||'')+'排 第'+String(pos.col||'')+'列</div>';
+            }
+            html += '</div>'; // close center
         }
-        html += '</div>'; // close center
         
         // Neighbor Panel (Bottom Left)
-        if (found) {
+        if (!isMulti && seat && seat.found) {
             const nb = seat.neighbors || {};
             const join = (arr) => { try { const a = Array.isArray(arr) ? arr.filter(Boolean) : []; return a.slice(0,2).join('、'); } catch (e) { return ''; } };
             const f = join(nb.front);
@@ -110,7 +355,7 @@
         }
 
         // Stats Panel (Bottom Right)
-        if (stats) {
+        if (!isMulti && stats) {
             html += '<div class="stats-panel">';
             
             // Last 3 picks
@@ -141,11 +386,16 @@
         html += '</div>'; // close overlay
         el.innerHTML = html;
       }
-      function renderInit() { const n = getParam('name'); showName(n); }
+      function renderInit() { 
+        const n = getParam('name'); 
+        const m = parseInt(getParam('max'), 10);
+        if (!isNaN(m) && m > 0) maxCount = m;
+        showName(n); 
+      }
       function runAnimate(seq, finalName, stepMs, seat, stats) {
         if (!Array.isArray(seq) || !seq.length) { showName(finalName, seat, stats); return; }
         if (running) return; running = true; let i = 0; const step = Number(stepMs || 40);
-        const tick = () => { if (i < seq.length) { showName(String(seq[i]||'')); i++; setTimeout(tick, step); } else { showName(String(finalName||''), seat, stats); running = false; } };
+        const tick = () => { if (i < seq.length) { showName(String(seq[i]||'')); i++; setTimeout(tick, step); } else { showName(finalName, seat, stats); running = false; } };
         tick();
       }
       renderInit();
@@ -157,7 +407,7 @@
             if (name !== ch) return;
             if (payload && payload.type === 'animate.pick') {
               const seq = Array.isArray(payload.names) ? payload.names : [];
-              const finalName = String(payload.final || '');
+              const finalName = payload.final || '';
               const stepMs = Number(payload.stepMs || 80);
               const seat = payload.seat || null;
               const stats = payload.stats || null;

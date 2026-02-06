@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>外部抽选</title>
+    <link rel="stylesheet" href="../../../renderer/remixicon-local.css" />
+    <link rel="stylesheet" href="../../../renderer/settings.css" />
+    <style>
+      :root {
+        --bg: #121621;
+        --fg: #ededed;
+        --muted: #94a3b8;
+        --accent: #238f4a;
+        --panel: rgba(255, 255, 255, 0.04);
+        --item-bg: rgba(255, 255, 255, 0.04);
+        --border: rgba(255, 255, 255, 0.12);
+        --accent-rgb: 35, 143, 74;
+        --bg-modal: #1b1f2a;
+      }
+      body { margin: 0; padding: 16px; color: var(--fg); background: var(--bg-modal); transition: background 0.3s, color 0.3s; }
+      .title { font-size: 18px; font-weight: 600; display:flex; align-items:center; gap:8px; margin-bottom: 12px; }
+      .list { display: flex; flex-direction: column; gap: 8px; }
+      .item { 
+        display: flex; align-items: center; gap: 12px; 
+        padding: 12px; 
+        background: var(--panel); 
+        border: 1px solid var(--border); 
+        border-radius: 12px; 
+        cursor: pointer; 
+        transition: all 0.2s; 
+      }
+      .item:hover { background: var(--item-bg); transform: translateY(-1px); border-color: var(--accent); }
+      .item:active { transform: translateY(0); }
+      .item img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: rgba(0,0,0,0.2); }
+      .item .info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+      .item .name { font-weight: 600; font-size: 15px; color: var(--fg); }
+      .item .desc { font-size: 12px; color: var(--muted); }
+      .item i.arrow { color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <div class="title"><i class="ri-external-link-line"></i> 外部抽选</div>
+    <div class="list">
+      <div class="item" onclick="openUrl('secrandom://main/roll')">
+        <img src="https://secrandom.sectl.top/logo.png" alt="SecRandom" />
+        <div class="info">
+          <div class="name">SecRandom</div>
+          <div class="desc">外部随机抽选工具</div>
+        </div>
+        <i class="arrow ri-arrow-right-s-line"></i>
+      </div>
+    </div>
+
+    <script>
+      let channel = ''; 
+      let caller = '';
+      
+      // 注入主题逻辑
+      window.applyTheme = (mode, color) => {
+        const root = document.documentElement;
+        const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        
+        const accent = color || '#238f4a';
+        root.style.setProperty('--accent', accent);
+        
+        const hex = accent.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        root.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
+        
+        if (isDark) {
+          root.style.setProperty('--bg', '#121621');
+          root.style.setProperty('--fg', '#ededed');
+          root.style.setProperty('--muted', '#94a3b8');
+          root.style.setProperty('--panel', 'rgba(255, 255, 255, 0.04)');
+          root.style.setProperty('--item-bg', 'rgba(255, 255, 255, 0.04)');
+          root.style.setProperty('--border', 'rgba(255, 255, 255, 0.12)');
+          root.style.setProperty('--bg-modal', '#1b1f2a');
+        } else {
+          root.style.setProperty('--bg', '#f3f4f6');
+          root.style.setProperty('--fg', '#1f2937');
+          root.style.setProperty('--muted', '#6b7280');
+          root.style.setProperty('--panel', '#ffffff');
+          root.style.setProperty('--item-bg', '#f9fafb');
+          root.style.setProperty('--border', '#e5e7eb');
+          root.style.setProperty('--bg-modal', '#ffffff');
+        }
+      };
+
+      (async () => {
+        try {
+          if (window.lowbarAPI?.configGet) {
+            const mode = await window.lowbarAPI.configGet('system', 'themeMode') || 'system';
+            const color = await window.lowbarAPI.configGet('system', 'themeColor') || '#238f4a';
+            window.applyTheme(mode, color);
+          }
+          
+          if (window.lowbarAPI?.onConfigChanged) {
+            window.lowbarAPI.onConfigChanged(({ scope, key, value }) => {
+              if (scope === 'system') {
+                 // 自动更新
+              }
+            });
+          }
+        } catch(e) {}
+      })();
+      
+      function readInit() { 
+        try { 
+          const u = new URL(window.location.href); 
+          channel = String(u.searchParams.get('channel')||''); 
+          caller = String(u.searchParams.get('caller')||''); 
+        } catch (e) {} 
+      }
+
+      async function openUrl(url) {
+        if (!url) return;
+        try {
+          if (caller && window.lowbarAPI?.pluginCall) {
+            await window.lowbarAPI.pluginCall(caller, 'openUrl', [url]);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      readInit();
+    </script>
+  </body>
+</html>

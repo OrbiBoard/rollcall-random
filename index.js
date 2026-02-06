@@ -1,5 +1,6 @@
 const path = require('path');
 const url = require('url');
+const { shell } = require('electron');
 
 let pluginApi = null;
 const state = {
@@ -7,6 +8,7 @@ const state = {
   students: [],
   picked: new Set(),
   currentName: '',
+  pickCount: 1,
   noRepeat: true,
   recent: [],
   recentLimit: 20,
@@ -32,13 +34,13 @@ function saveHistory(name) {
   try {
     const now = Date.now();
     const fiveDaysAgo = now - 5 * 24 * 60 * 60 * 1000;
-    
+
     // Add new record
     state.history.push({ name, timestamp: now });
-    
+
     // Prune records older than 5 days
     state.history = state.history.filter(h => h.timestamp >= fiveDaysAgo);
-    
+
     pluginApi.store.set('history', state.history);
   } catch (e) {
     console.error('Failed to save history', e);
@@ -48,19 +50,19 @@ function saveHistory(name) {
 function getStats(name) {
   const now = Date.now();
   const fiveDaysAgo = now - 5 * 24 * 60 * 60 * 1000;
-  
+
   // 1. Last 3 picks
   const myPicks = state.history
     .filter(h => h.name === name)
     .sort((a, b) => b.timestamp - a.timestamp);
   const last3 = myPicks.slice(0, 3).map(h => h.timestamp);
-  
+
   // 2. Last 5 days stats
   const recentPicks = state.history.filter(h => h.timestamp >= fiveDaysAgo);
   const myRecentCount = recentPicks.filter(h => h.name === name).length;
   const totalRecentCount = recentPicks.length;
   const probability = totalRecentCount > 0 ? (myRecentCount / totalRecentCount) : 0;
-  
+
   return {
     last3,
     recentCount: myRecentCount,
@@ -70,7 +72,7 @@ function getStats(name) {
 }
 
 function emitUpdate(target, value) {
-  try { pluginApi.emit(state.eventChannel, { type: 'update', target, value }); } catch (e) {}
+  try { pluginApi.emit(state.eventChannel, { type: 'update', target, value }); } catch (e) { }
 }
 
 async function ensureStudents() {
@@ -82,27 +84,31 @@ async function ensureStudents() {
   } catch (e) { state.students = []; }
 }
 
-function pickOne() {
+function pickOne(batchExcluded) {
   const names = state.students.map((s) => String(s.name || '').trim()).filter((n) => !!n);
   const unique = Array.from(new Set(names));
-  
-  // 公平抽选逻辑：使用 state.picked 记录已抽选名单
-  // 当所有人都被抽过一轮后，自动重置（开启新一轮）
+
+  // 基础池：先排除本轮已选（确保单次批量抽选中不重复）
+  let basePool = unique.filter((n) => !batchExcluded || !batchExcluded.has(n));
+  if (basePool.length === 0) return ''; // 没得选了
+
   let pool = [];
   if (state.noRepeat) {
-    pool = unique.filter((n) => !state.picked.has(n));
+    // 进一步排除全局已选
+    pool = basePool.filter((n) => !state.picked.has(n));
     if (pool.length === 0) {
-      // 全部抽完，重置
+      // 全部抽完，重置全局记录
       state.picked.clear();
-      pool = unique;
+      // 重置后，依然基于基础池（排除本轮已选）
+      pool = basePool;
     }
   } else {
-    pool = unique;
+    pool = basePool;
   }
 
   const idx = Math.floor(Math.random() * pool.length);
   const name = pool[idx] || '';
-  
+
   if (name) {
     state.currentName = name;
     if (state.noRepeat) {
@@ -124,17 +130,23 @@ const functions = {
       const floatFile = path.join(__dirname, 'float', 'settings.html');
       state.backgroundBase = url.pathToFileURL(bgFile).href;
       state.floatSettingsBase = url.pathToFileURL(floatFile).href;
-      const initBg = state.backgroundBase + '?channel=' + encodeURIComponent(state.eventChannel) + '&caller=rollcall-random&name=';
+      const names = state.students.map((s) => String(s.name || '').trim()).filter((n) => !!n);
+      const uniqueCount = new Set(names).size;
+      const initBg = state.backgroundBase + '?channel=' + encodeURIComponent(state.eventChannel) + '&caller=rollcall-random&max=' + uniqueCount + '&name=';
       const params = {
         title: '随机点名',
+        icon: 'ri-shuffle-line',
         eventChannel: state.eventChannel,
         subscribeTopics: [state.eventChannel],
         callerPluginId: 'rollcall-random',
         floatingSizePercent: 48,
         floatingWidth: 520,
         floatingHeight: 360,
-        centerItems: [ { id: 'start-roll', text: '开始抽选', icon: 'ri-shuffle-line' } ],
-        leftItems: [ { id: 'openSettings', text: '抽选设置', icon: 'ri-settings-3-line' } ],
+        centerItems: [{ id: 'start-roll', text: '开始抽选', icon: 'ri-shuffle-line' }],
+        leftItems: [
+          { id: 'openSettings', text: '抽选设置', icon: 'ri-settings-3-line' },
+          { id: 'openExternal', text: '外部抽选', icon: 'ri-external-link-line' }
+        ],
         backgroundUrl: initBg,
         floatingUrl: null,
         backgroundTargets: { rollcall: state.backgroundBase },
@@ -152,17 +164,37 @@ const functions = {
           await ensureStudents();
           const names = state.students.map((s) => String(s.name || '').trim()).filter((n) => !!n);
           const unique = Array.from(new Set(names));
-          const finalName = pickOne();
+
+          const count = Math.max(1, state.pickCount || 1);
+          const actualCount = Math.min(count, unique.length); // 限制不超过总人数
+          const finalNames = [];
+          const batchSet = new Set();
+          
+          for (let k = 0; k < actualCount; k++) {
+            const name = pickOne(batchSet);
+            if (name) {
+              finalNames.push(name);
+              batchSet.add(name);
+            }
+          }
+
           const seq = [];
           const exclude = state.noRepeat ? new Set(state.recent) : new Set();
           const pool = state.noRepeat ? unique.filter((n) => !exclude.has(n)) : unique;
           const basePool = pool.length ? pool : unique;
           const steps = basePool.length ? Math.min(5, basePool.length) : 0;
-          for (let i = 0; i < steps; i++) { const j = Math.floor(Math.random() * basePool.length); seq.push(basePool[j] || finalName || ''); }
+          for (let i = 0; i < steps; i++) { const j = Math.floor(Math.random() * basePool.length); seq.push(basePool[j] || ''); }
+
           let seat = null;
-          try { seat = await functions._getSeatingContext(finalName); } catch (e) { seat = null; }
-          try { pluginApi.emit(state.eventChannel, { type: 'animate.pick', names: seq, final: finalName, stepMs: 40, seat }); } catch (e) {}
+          if (finalNames.length === 1) {
+            try { seat = await functions._getSeatingContext(finalNames[0]); } catch (e) { seat = null; }
+          }
+
+          try { pluginApi.emit(state.eventChannel, { type: 'animate.pick', names: seq, final: finalNames, stepMs: 40, seat }); } catch (e) { }
         }
+      } else if (payload.type === 'config.count') {
+        const c = parseInt(payload.count, 10);
+        if (!isNaN(c) && c >= 1) state.pickCount = c;
       } else if (payload.type === 'left.click') {
         if (payload.id === 'openSettings') {
           emitUpdate('floatingBounds', 'left');
@@ -172,6 +204,14 @@ const functions = {
           u.searchParams.set('caller', 'rollcall-random');
           u.searchParams.set('noRepeat', state.noRepeat ? '1' : '0');
           u.searchParams.set('recentLimit', String(state.recentLimit || 20));
+          emitUpdate('floatingUrl', u.href);
+        } else if (payload.id === 'openExternal') {
+          emitUpdate('floatingBounds', 'left');
+          emitUpdate('floatingBounds', { width: 360, height: 480 });
+          const extFile = path.join(__dirname, 'float', 'external.html');
+          const u = new URL(url.pathToFileURL(extFile).href);
+          u.searchParams.set('channel', state.eventChannel);
+          u.searchParams.set('caller', 'rollcall-random');
           emitUpdate('floatingUrl', u.href);
         }
       } else if (payload.type === 'float.settings') {
@@ -199,13 +239,13 @@ const functions = {
       const name = String(finalName || '').trim();
       if (!name) return { found: false };
       let foundKey = '';
-      for (const k of Object.keys(seats || {})) { const v = seats[k]; if (v && String(v.name||'').trim() === name) { foundKey = k; break; } }
+      for (const k of Object.keys(seats || {})) { const v = seats[k]; if (v && String(v.name || '').trim() === name) { foundKey = k; break; } }
       if (!foundKey) return { found: false };
       const parts = foundKey.split('-');
       if (parts.length !== 2) return { found: false };
       const rowId = parts[0]; const colId = parts[1];
-      const ri = rows.findIndex(r => String(r?.id||'') === rowId);
-      const ci = cols.findIndex(c => String(c?.id||'') === colId);
+      const ri = rows.findIndex(r => String(r?.id || '') === rowId);
+      const ci = cols.findIndex(c => String(c?.id || '') === colId);
       if (ri < 0 || ci < 0) return { found: false };
       const isAisleRow = (i) => (rows[i]?.type || 'row') === 'aisle';
       const isAisleCol = (i) => (cols[i]?.type || 'col') === 'aisle';
@@ -219,15 +259,22 @@ const functions = {
       const collectBack = () => { const arr = []; let r = ri + 1; while (r < rows.length && arr.length < 2) { if (!isAisleRow(r)) { const nm = occupantAt(r, ci); if (nm) arr.push(nm); } r++; } return arr; };
       return { found: true, pos: { row: rowNumber, col: colNumber }, neighbors: { left: collectLeft(), right: collectRight(), front: collectFront(), back: collectBack() } };
     } catch (e) { return { found: false }; }
+  },
+  openUrl: async (targetUrl) => {
+    try {
+      if (!targetUrl || typeof targetUrl !== 'string') return { ok: false };
+      await shell.openExternal(targetUrl);
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e?.message }; }
   }
-  
+
 };
 
 // 供预加载 quickAPI 调用的窗口控制函数
 
-const init = async (api) => { 
-  pluginApi = api; 
+const init = async (api) => {
+  pluginApi = api;
   loadHistory();
 };
 
-module.exports = { name: '随机点名', version: '0.1.0', init, functions: { ...functions, getVariable: async (name) => { const k=String(name||''); if (k==='currentName') return String(state.currentName||''); return ''; }, listVariables: () => ['currentName'] } };
+module.exports = { name: '随机点名', version: '0.1.0', init, functions: { ...functions, getVariable: async (name) => { const k = String(name || ''); if (k === 'currentName') return String(state.currentName || ''); return ''; }, listVariables: () => ['currentName'] } };
