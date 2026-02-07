@@ -172,6 +172,13 @@
         radial-gradient(circle at 80% 70%, var(--accent) 0%, transparent 20%);
       filter: blur(60px);
     }
+    /* Fullscreen adaptation */
+    .counter-panel, .neighbor-panel, .stats-panel { 
+      transition: bottom 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s; 
+    }
+    body.fs-mode .counter-panel { bottom: 92px; }
+    body.fs-mode .neighbor-panel { bottom: 112px; }
+    body.fs-mode .stats-panel { bottom: 112px; }
   </style>
   </head>
   <body>
@@ -416,6 +423,19 @@
           });
         }
       } catch (e) {}
+      // Fullscreen detection
+      function updateFullscreen() {
+        try {
+          const fsMatch = (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches); 
+          const isFs = !!document.fullscreenElement || fsMatch || (window.innerHeight >= (screen.availHeight - 1));
+          if (isFs) document.body.classList.add('fs-mode');
+          else document.body.classList.remove('fs-mode');
+        } catch(e){}
+      }
+      window.addEventListener('resize', updateFullscreen);
+      // Check periodically in case of rapid changes or init delays
+      setInterval(updateFullscreen, 1000);
+      updateFullscreen();
     </script>
   </body>
   </html>
