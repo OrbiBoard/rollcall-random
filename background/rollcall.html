@@ -15,6 +15,10 @@
       --item-bg: rgba(255, 255, 255, 0.04);
       --border: rgba(255, 255, 255, 0.12);
       --accent-rgb: 35, 143, 74;
+      --luck-high: #4ade80;
+      --luck-lucky: #fbbf24;
+      --luck-miracle: #f472b6;
+      --luck-patience: #60a5fa;
     }
 
     body {
@@ -64,21 +68,52 @@
     .overlay .center { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
     .overlay .pos { font-size: 20px; color: var(--fg); opacity: 0.85; text-shadow: 0 4px 12px rgba(0,0,0,0.35); }
     
-    /* Neighbor Panel */
+    .probability-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-top: 4px;
+      animation: fadeIn 0.5s ease;
+    }
+    .probability-badge.high { background: rgba(74, 222, 128, 0.2); color: var(--luck-high); }
+    .probability-badge.above-avg { background: rgba(74, 222, 128, 0.15); color: var(--luck-high); }
+    .probability-badge.normal { background: rgba(255, 255, 255, 0.1); color: var(--muted); }
+    .probability-badge.lucky { background: rgba(251, 191, 36, 0.2); color: var(--luck-lucky); }
+    .probability-badge.miracle { background: rgba(244, 114, 182, 0.2); color: var(--luck-miracle); }
+    .probability-badge.patience { background: rgba(96, 165, 250, 0.2); color: var(--luck-patience); }
+    .probability-badge.long-wait { background: rgba(96, 165, 250, 0.25); color: var(--luck-patience); }
+    
+    .probability-badge .prob-value { font-weight: 700; }
+    .probability-badge .luck-icon { font-size: 16px; }
+    
+    .probability-detail {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      animation: fadeIn 0.6s ease;
+    }
+    .probability-detail .divider { width: 1px; height: 12px; background: var(--border); }
+    .probability-detail .highlight { color: var(--fg); font-weight: 500; }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
     .neighbor-panel {
       position: absolute;
       left: 32px;
       bottom: 32px;
       z-index: 10;
-      background: var(--panel);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 16px 20px;
       color: var(--fg);
       min-width: 180px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
       animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
     .neighbor-panel table { width: 100%; border-collapse: collapse; }
@@ -91,23 +126,16 @@
       right: 32px;
       bottom: 32px;
       z-index: 10;
-      background: var(--panel);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 16px 20px;
       color: var(--fg);
       min-width: 220px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
       animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
       display: flex;
       flex-direction: column;
       gap: 12px;
     }
-    .stats-item { display: flex; flex-direction: column; gap: 4px; }
+    .stats-item { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
     .stats-label { font-size: 13px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-    .stats-value { font-size: 16px; font-weight: 600; color: var(--fg); }
+    .stats-value { font-size: 16px; font-weight: 600; color: var(--fg); text-align: right; }
     .stats-sub { font-size: 13px; color: var(--muted); opacity: 0.8; }
     .history-list { display: flex; flex-direction: column; gap: 4px; }
     .history-item { font-size: 14px; color: var(--fg); opacity: 0.85; display: flex; justify-content: space-between; }
@@ -161,7 +189,6 @@
     .name-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 48px; max-width: 85vw; }
     .name-item { font-size: 64px; font-weight: 800; letter-spacing: 4px; text-shadow: 0 8px 24px rgba(0,0,0,0.35); color: var(--fg); }
 
-    /* 动画背景效果 */
     .bg-effect {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -172,7 +199,7 @@
         radial-gradient(circle at 80% 70%, var(--accent) 0%, transparent 20%);
       filter: blur(60px);
     }
-    /* Fullscreen adaptation */
+    
     .counter-panel, .neighbor-panel, .stats-panel { 
       transition: bottom 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s; 
     }
@@ -190,11 +217,9 @@
     </div>
     
     <div class="controls" style="top: 20px; right: 20px;">
-        <!-- Placeholder for close button if needed, but usually handled by parent -->
     </div>
 
     <script>
-      // 注入主题逻辑
       window.applyTheme = (mode, color) => {
         const root = document.documentElement;
         const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -225,50 +250,6 @@
         }
       };
 
-      (async () => {
-        try {
-          // 获取初始配置
-          const cfg = await window.lowbarAPI?.configGetAll?.('system') || {}; // rollcall uses lowbarAPI? check script
-          // If lowbarAPI doesn't support configGetAll directly, we might need another way or assume defaults.
-          // Based on previous files, plugins use pluginAPI or settingsAPI. 
-          // But rollcall seems to be a "lowbar plugin" or similar context? 
-          // The script below uses lowbarAPI. Let's try to use lowbarAPI for config if available, 
-          // or just default to system theme if we can't fetch.
-          // Actually, let's just listen for events if possible, or try to fetch from somewhere.
-          // Since it's a background page, maybe it has access to node integration or specific APIs?
-          // The previous code had `window.lowbarAPI`. Let's stick to that.
-          
-          // However, lowbarAPI might not expose config directly. 
-          // Let's assume for now we can't easily fetch config unless we add it to lowbarAPI preload.
-          // But wait, we added `onConfigChanged` to `ui-lowbar/preload.js` earlier! 
-          // Is `rollcall-random` using `ui-lowbar`'s preload? 
-          // Usually plugins have their own preload or share one. 
-          // If this is a background window opened by lowbar, it might. 
-          // Let's check if we can access `window.lowbarAPI.configGet` (we added it to ui-lowbar preload).
-          
-          if (window.lowbarAPI?.configGet) {
-             const mode = await window.lowbarAPI.configGet('system', 'themeMode') || 'system';
-             const color = await window.lowbarAPI.configGet('system', 'themeColor') || '#238f4a';
-             window.applyTheme(mode, color);
-          }
-          
-          if (window.lowbarAPI?.onConfigChanged) {
-             window.lowbarAPI.onConfigChanged(({ scope, key, value }) => {
-                if (scope === 'system') {
-                   // We need current state to apply updates correctly (e.g. if only color changes, mode should stay)
-                   // For simplicity, we can just fetch all again or store locally.
-                   // Let's store locally in closure variables if we were inside one, but here we are in async IIFE.
-                   // We can re-fetch or just update what changed.
-                   // But applyTheme takes (mode, color). 
-                   // Let's just re-fetch to be safe or improve applyTheme to handle partial updates?
-                   // Better: store current state globally.
-                }
-             });
-          }
-        } catch(e) {}
-      })();
-      
-      // Global theme state
       let currentThemeMode = 'system';
       let currentThemeColor = '#238f4a';
       
@@ -281,18 +262,24 @@
             }
             
             if (window.lowbarAPI?.onConfigChanged) {
-               window.lowbarAPI.onConfigChanged(({ scope, key, value }) => {
+               window.lowbarAPI.onConfigChanged(async ({ scope, key, value }) => {
                   if (scope === 'system') {
-                     if (key === 'themeMode') currentThemeMode = value;
-                     if (key === 'themeColor') currentThemeColor = value;
+                     currentThemeMode = await window.lowbarAPI.configGet('system', 'themeMode') || 'system';
+                     currentThemeColor = await window.lowbarAPI.configGet('system', 'themeColor') || '#238f4a';
                      window.applyTheme(currentThemeMode, currentThemeColor);
                   }
                });
             }
             
-            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-              if (currentThemeMode === 'system') window.applyTheme('system', currentThemeColor);
-            });
+            if (window.matchMedia) {
+              window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => {
+                const m = await window.lowbarAPI?.configGet('system', 'themeMode') || 'system';
+                if (m === 'system') {
+                  const c = await window.lowbarAPI?.configGet('system', 'themeColor') || '#238f4a';
+                  window.applyTheme('system', c);
+                }
+              });
+            }
          } catch(e) { console.error(e); }
       }
       initTheme();
@@ -318,7 +305,21 @@
         }
       }
       function getParam(k) { try { const u = new URL(window.location.href); return String(u.searchParams.get(k) || '').trim(); } catch (e) { return ''; } }
-      function showName(n, seat, stats) {
+      
+      function getLuckIcon(luckLevel) {
+        const icons = {
+          'high': 'ri-checkbox-circle-line',
+          'above-avg': 'ri-arrow-up-line',
+          'normal': 'ri-checkbox-blank-line',
+          'lucky': 'ri-sparkling-line',
+          'miracle': 'ri-magic-line',
+          'patience': 'ri-time-line',
+          'long-wait': 'ri-trophy-line'
+        };
+        return icons[luckLevel] || 'ri-checkbox-blank-line';
+      }
+      
+      function showName(n, seat, pickedStats) {
         const el = document.getElementById('content');
         if (!n || (Array.isArray(n) && n.length === 0)) { el.innerHTML = '<div class="placeholder"><i class="ri-shuffle-line"></i><span>未开始抽选</span></div>'; return; }
         
@@ -326,7 +327,7 @@
         const isMulti = names.length > 1;
         
         let html = '<div class="overlay">';
-        // Center Name
+        
         if (isMulti) {
             html += '<div class="center"><div class="name-grid">';
             names.forEach(nm => {
@@ -339,10 +340,26 @@
                  const pos = seat.pos || { row: '', col: '' };
                  html += '<div class="pos">第'+String(pos.row||'')+'排 第'+String(pos.col||'')+'列</div>';
             }
-            html += '</div>'; // close center
+            
+            if (pickedStats) {
+              html += '<div class="probability-badge ' + pickedStats.luckLevel + '">';
+              html += '<i class="' + getLuckIcon(pickedStats.luckLevel) + ' luck-icon"></i>';
+              html += '<span class="prob-value">' + pickedStats.probabilityPercent + '%</span>';
+              html += '<span>' + pickedStats.luckText + '</span>';
+              html += '</div>';
+              
+              html += '<div class="probability-detail">';
+              html += '<span>概率排名 <span class="highlight">#' + pickedStats.rank + '/' + pickedStats.totalCandidates + '</span></span>';
+              if (pickedStats.consecutiveMisses > 0) {
+                html += '<span class="divider"></span>';
+                html += '<span>未抽到 <span class="highlight">' + pickedStats.consecutiveMisses + '</span>次</span>';
+              }
+              html += '</div>';
+            }
+            
+            html += '</div>';
         }
         
-        // Neighbor Panel (Bottom Left)
         if (!isMulti && seat && seat.found) {
             const nb = seat.neighbors || {};
             const join = (arr) => { try { const a = Array.isArray(arr) ? arr.filter(Boolean) : []; return a.slice(0,2).join('、'); } catch (e) { return ''; } };
@@ -361,50 +378,45 @@
             }
         }
 
-        // Stats Panel (Bottom Right)
-        if (!isMulti && stats) {
+        if (!isMulti && pickedStats) {
             html += '<div class="stats-panel">';
             
-            // Last 3 picks
-            if (Array.isArray(stats.last3) && stats.last3.length > 0) {
-                html += '<div class="stats-item">';
-                html += '<div class="stats-label">最近抽中</div>';
-                html += '<div class="history-list">';
-                stats.last3.forEach(ts => {
-                    const d = new Date(ts);
-                    const tStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    html += '<div class="history-item"><span>'+tStr+'</span></div>';
-                });
-                html += '</div></div>';
-            }
-
-            // Recent frequency
-            const count = stats.recentCount || 0;
-            const prob = typeof stats.probability === 'number' ? (stats.probability * 100).toFixed(1) + '%' : '0%';
+            html += '<div class="stats-item">';
+            html += '<div class="stats-label">本次概率</div>';
+            html += '<div class="stats-value">' + pickedStats.probabilityPercent + '%</div>';
+            html += '</div>';
             
             html += '<div class="stats-item">';
-            html += '<div class="stats-label">近5天统计</div>';
-            html += '<div class="stats-value">' + count + ' 次 <span class="stats-sub">(' + prob + ')</span></div>';
+            html += '<div class="stats-label">本周被抽</div>';
+            html += '<div class="stats-value">' + pickedStats.pickCount + ' 次</div>';
+            html += '</div>';
+            
+            html += '<div class="stats-item">';
+            html += '<div class="stats-label">概率排名</div>';
+            html += '<div class="stats-value">第 ' + pickedStats.rank + ' 名 <span class="stats-sub">/ ' + pickedStats.totalCandidates + ' 人</span></div>';
             html += '</div>';
 
             html += '</div>';
         }
         
-        html += '</div>'; // close overlay
+        html += '</div>';
         el.innerHTML = html;
       }
+      
       function renderInit() { 
         const n = getParam('name'); 
         const m = parseInt(getParam('max'), 10);
         if (!isNaN(m) && m > 0) maxCount = m;
         showName(n); 
       }
-      function runAnimate(seq, finalName, stepMs, seat, stats) {
-        if (!Array.isArray(seq) || !seq.length) { showName(finalName, seat, stats); return; }
+      
+      function runAnimate(seq, finalName, stepMs, seat, pickedStats) {
+        if (!Array.isArray(seq) || !seq.length) { showName(finalName, seat, pickedStats); return; }
         if (running) return; running = true; let i = 0; const step = Number(stepMs || 40);
-        const tick = () => { if (i < seq.length) { showName(String(seq[i]||'')); i++; setTimeout(tick, step); } else { showName(finalName, seat, stats); running = false; } };
+        const tick = () => { if (i < seq.length) { showName(String(seq[i]||'')); i++; setTimeout(tick, step); } else { showName(finalName, seat, pickedStats); running = false; } };
         tick();
       }
+      
       renderInit();
       try {
         const ch = getParam('channel');
@@ -417,13 +429,13 @@
               const finalName = payload.final || '';
               const stepMs = Number(payload.stepMs || 80);
               const seat = payload.seat || null;
-              const stats = payload.stats || null;
-              runAnimate(seq, finalName, stepMs, seat, stats);
+              const pickedStats = payload.pickedPersonStats || null;
+              runAnimate(seq, finalName, stepMs, seat, pickedStats);
             }
           });
         }
       } catch (e) {}
-      // Fullscreen detection
+      
       function updateFullscreen() {
         try {
           const fsMatch = (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches); 
@@ -433,7 +445,6 @@
         } catch(e){}
       }
       window.addEventListener('resize', updateFullscreen);
-      // Check periodically in case of rapid changes or init delays
       setInterval(updateFullscreen, 1000);
       updateFullscreen();
     </script>

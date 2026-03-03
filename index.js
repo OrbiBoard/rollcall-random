@@ -14,18 +14,46 @@ const state = {
   recentLimit: 20,
   backgroundBase: '',
   floatSettingsBase: '',
-  history: [] // { name: string, timestamp: number }
+  history: [],
+  fairMode: true,
+  genderBalance: false,
+  coldStartWeight: 1.5,
+  maxGapThreshold: 3,
+  minCandidatePool: 3
 };
 
 function loadHistory() {
-  if (!pluginApi) return;
+  if (!pluginApi || !pluginApi.store) return;
   try {
     const data = pluginApi.store.get('history');
     if (Array.isArray(data)) {
       state.history = data;
     }
   } catch (e) {
+    console.error('loadHistory error:', e);
     state.history = [];
+  }
+}
+
+function loadFairSettings() {
+  if (!pluginApi || !pluginApi.store) return;
+  try {
+    const settings = pluginApi.store.get('fairSettings');
+    if (settings !== null && settings !== undefined && typeof settings === 'object') {
+      if (typeof settings.fairMode === 'boolean') state.fairMode = settings.fairMode;
+      if (typeof settings.genderBalance === 'boolean') state.genderBalance = settings.genderBalance;
+      if (typeof settings.coldStartWeight === 'number' && Number.isFinite(settings.coldStartWeight)) {
+        state.coldStartWeight = Math.max(1, Math.min(3, settings.coldStartWeight));
+      }
+      if (typeof settings.maxGapThreshold === 'number' && Number.isFinite(settings.maxGapThreshold)) {
+        state.maxGapThreshold = Math.max(1, Math.min(10, settings.maxGapThreshold));
+      }
+      if (typeof settings.minCandidatePool === 'number' && Number.isFinite(settings.minCandidatePool)) {
+        state.minCandidatePool = Math.max(1, Math.min(20, settings.minCandidatePool));
+      }
+    }
+  } catch (e) {
+    console.error('loadFairSettings error:', e);
   }
 }
 
@@ -34,30 +62,189 @@ function saveHistory(name) {
   try {
     const now = Date.now();
     const fiveDaysAgo = now - 5 * 24 * 60 * 60 * 1000;
-
-    // Add new record
     state.history.push({ name, timestamp: now });
-
-    // Prune records older than 5 days
     state.history = state.history.filter(h => h.timestamp >= fiveDaysAgo);
-
     pluginApi.store.set('history', state.history);
   } catch (e) {
     console.error('Failed to save history', e);
   }
 }
 
+function getPickCountByName(name) {
+  return state.history.filter(h => h.name === name).length;
+}
+
+function getAllPickStats() {
+  const names = state.students.map(s => String(s.name || '').trim()).filter(n => !!n);
+  const unique = Array.from(new Set(names));
+  const stats = {};
+  unique.forEach(name => {
+    stats[name] = getPickCountByName(name);
+  });
+  return stats;
+}
+
+function calculateAveragePickCount(stats) {
+  const values = Object.values(stats);
+  if (values.length === 0) return 0;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function calculateWeights(stats, options = {}) {
+  const { coldStartWeight = 1.5, avgCount = 0 } = options;
+  const weights = {};
+  const names = Object.keys(stats);
+
+  names.forEach(name => {
+    const count = stats[name];
+    let weight;
+
+    if (count === 0) {
+      weight = coldStartWeight * 10;
+    } else if (count <= avgCount) {
+      weight = (avgCount - count + 1) * coldStartWeight;
+    } else {
+      weight = 1 / (count - avgCount + 1);
+    }
+
+    weights[name] = Math.max(0.1, weight);
+  });
+
+  return weights;
+}
+
+function buildCandidatePool(stats, options = {}) {
+  const {
+    avgCount = 0,
+    maxGapThreshold = 3,
+    minCandidatePool = 3,
+    batchExcluded = null
+  } = options;
+
+  let candidates = Object.keys(stats);
+
+  if (batchExcluded && batchExcluded.size > 0) {
+    candidates = candidates.filter(n => !batchExcluded.has(n));
+  }
+
+  if (candidates.length === 0) return [];
+
+  const counts = candidates.map(n => stats[n]);
+  const minCount = Math.min(...counts);
+  const maxCount = Math.max(...counts);
+  const gap = maxCount - minCount;
+
+  if (gap > maxGapThreshold) {
+    const threshold = maxCount - Math.floor(gap / 2);
+    let filtered = candidates.filter(n => stats[n] <= threshold);
+
+    if (filtered.length >= minCandidatePool) {
+      candidates = filtered;
+    }
+  }
+
+  let avgFiltered = candidates.filter(n => stats[n] <= avgCount);
+  if (avgFiltered.length >= minCandidatePool) {
+    candidates = avgFiltered;
+  }
+
+  if (candidates.length < minCandidatePool) {
+    const sortedByCount = Object.keys(stats)
+      .filter(n => !batchExcluded || !batchExcluded.has(n))
+      .sort((a, b) => stats[a] - stats[b]);
+    candidates = sortedByCount.slice(0, Math.max(minCandidatePool, sortedByCount.length));
+  }
+
+  return candidates;
+}
+
+function selectByWeight(candidates, weights) {
+  if (candidates.length === 0) return '';
+  if (candidates.length === 1) return candidates[0];
+
+  const totalWeight = candidates.reduce((sum, name) => sum + (weights[name] || 1), 0);
+  let random = Math.random() * totalWeight;
+
+  for (const name of candidates) {
+    random -= (weights[name] || 1);
+    if (random <= 0) {
+      return name;
+    }
+  }
+
+  return candidates[candidates.length - 1];
+}
+
+function calculateProbabilities(candidates, weights) {
+  const probs = {};
+  if (candidates.length === 0) return probs;
+
+  const totalWeight = candidates.reduce((sum, name) => sum + (weights[name] || 1), 0);
+
+  candidates.forEach(name => {
+    probs[name] = (weights[name] || 1) / totalWeight;
+  });
+
+  return probs;
+}
+
+function getGenderStats(name) {
+  const student = state.students.find(s => String(s.name || '').trim() === name);
+  return student?.gender || '未选择';
+}
+
+function applyGenderBalance(candidates, weights, stats) {
+  if (!state.genderBalance || candidates.length < 2) return weights;
+
+  const adjustedWeights = { ...weights };
+  const genderCounts = { '男': 0, '女': 0, '未选择': 0 };
+  const genderTotalWeight = { '男': 0, '女': 0, '未选择': 0 };
+
+  candidates.forEach(name => {
+    const gender = getGenderStats(name);
+    const w = weights[name] || 1;
+    if (genderCounts[gender] !== undefined) {
+      genderCounts[gender]++;
+      genderTotalWeight[gender] += w;
+    }
+  });
+
+  if (genderCounts['男'] === 0 || genderCounts['女'] === 0) return weights;
+
+  const maleAvgWeight = genderTotalWeight['男'] / genderCounts['男'];
+  const femaleAvgWeight = genderTotalWeight['女'] / genderCounts['女'];
+
+  if (maleAvgWeight > 0 && femaleAvgWeight > 0) {
+    const ratio = maleAvgWeight / femaleAvgWeight;
+    const balanceFactor = 1.2;
+
+    if (ratio > balanceFactor) {
+      candidates.forEach(name => {
+        if (getGenderStats(name) === '女') {
+          adjustedWeights[name] = (weights[name] || 1) * ratio;
+        }
+      });
+    } else if (ratio < 1 / balanceFactor) {
+      candidates.forEach(name => {
+        if (getGenderStats(name) === '男') {
+          adjustedWeights[name] = (weights[name] || 1) / ratio;
+        }
+      });
+    }
+  }
+
+  return adjustedWeights;
+}
+
 function getStats(name) {
   const now = Date.now();
   const fiveDaysAgo = now - 5 * 24 * 60 * 60 * 1000;
 
-  // 1. Last 3 picks
   const myPicks = state.history
     .filter(h => h.name === name)
     .sort((a, b) => b.timestamp - a.timestamp);
   const last3 = myPicks.slice(0, 3).map(h => h.timestamp);
 
-  // 2. Last 5 days stats
   const recentPicks = state.history.filter(h => h.timestamp >= fiveDaysAgo);
   const myRecentCount = recentPicks.filter(h => h.name === name).length;
   const totalRecentCount = recentPicks.length;
@@ -84,22 +271,69 @@ async function ensureStudents() {
   } catch (e) { state.students = []; }
 }
 
-function pickOne(batchExcluded) {
+function pickOneFair(batchExcluded) {
   const names = state.students.map((s) => String(s.name || '').trim()).filter((n) => !!n);
   const unique = Array.from(new Set(names));
 
-  // 基础池：先排除本轮已选（确保单次批量抽选中不重复）
   let basePool = unique.filter((n) => !batchExcluded || !batchExcluded.has(n));
-  if (basePool.length === 0) return ''; // 没得选了
+  if (basePool.length === 0) return '';
+
+  if (!state.fairMode) {
+    return pickOneSimple(batchExcluded);
+  }
+
+  const stats = {};
+  basePool.forEach(name => {
+    stats[name] = getPickCountByName(name);
+  });
+
+  const avgCount = calculateAveragePickCount(stats);
+
+  let candidates = buildCandidatePool(stats, {
+    avgCount,
+    maxGapThreshold: state.maxGapThreshold,
+    minCandidatePool: state.minCandidatePool,
+    batchExcluded
+  });
+
+  if (candidates.length === 0) {
+    candidates = basePool;
+  }
+
+  let weights = calculateWeights(stats, {
+    coldStartWeight: state.coldStartWeight,
+    avgCount
+  });
+
+  if (state.genderBalance) {
+    weights = applyGenderBalance(candidates, weights, stats);
+  }
+
+  const name = selectByWeight(candidates, weights);
+
+  if (name) {
+    state.currentName = name;
+    if (state.noRepeat) {
+      state.picked.add(name);
+      state.recent.push(name);
+      if (state.recent.length > state.recentLimit) state.recent.shift();
+    }
+  }
+  return name;
+}
+
+function pickOneSimple(batchExcluded) {
+  const names = state.students.map((s) => String(s.name || '').trim()).filter((n) => !!n);
+  const unique = Array.from(new Set(names));
+
+  let basePool = unique.filter((n) => !batchExcluded || !batchExcluded.has(n));
+  if (basePool.length === 0) return '';
 
   let pool = [];
   if (state.noRepeat) {
-    // 进一步排除全局已选
     pool = basePool.filter((n) => !state.picked.has(n));
     if (pool.length === 0) {
-      // 全部抽完，重置全局记录
       state.picked.clear();
-      // 重置后，依然基于基础池（排除本轮已选）
       pool = basePool;
     }
   } else {
@@ -113,12 +347,132 @@ function pickOne(batchExcluded) {
     state.currentName = name;
     if (state.noRepeat) {
       state.picked.add(name);
-      // 保持 recent 兼容性（虽然逻辑主要依赖 picked）
       state.recent.push(name);
       if (state.recent.length > state.recentLimit) state.recent.shift();
     }
   }
   return name;
+}
+
+function pickOne(batchExcluded) {
+  if (state.fairMode) {
+    return pickOneFair(batchExcluded);
+  }
+  return pickOneSimple(batchExcluded);
+}
+
+function getFairPickInfo(batchExcluded = null) {
+  const names = state.students.map((s) => String(s.name || '').trim()).filter((n) => !!n);
+  const unique = Array.from(new Set(names));
+
+  let basePool = unique.filter((n) => !batchExcluded || !batchExcluded.has(n));
+  if (basePool.length === 0) {
+    return { candidates: [], weights: {}, probabilities: {}, stats: {} };
+  }
+
+  const stats = {};
+  basePool.forEach(name => {
+    stats[name] = getPickCountByName(name);
+  });
+
+  const avgCount = calculateAveragePickCount(stats);
+
+  let candidates = buildCandidatePool(stats, {
+    avgCount,
+    maxGapThreshold: state.maxGapThreshold,
+    minCandidatePool: state.minCandidatePool,
+    batchExcluded
+  });
+
+  if (candidates.length === 0) {
+    candidates = basePool;
+  }
+
+  let weights = calculateWeights(stats, {
+    coldStartWeight: state.coldStartWeight,
+    avgCount
+  });
+
+  if (state.genderBalance) {
+    weights = applyGenderBalance(candidates, weights, stats);
+  }
+
+  const probabilities = calculateProbabilities(candidates, weights);
+
+  return {
+    candidates,
+    weights,
+    probabilities,
+    stats,
+    avgCount
+  };
+}
+
+function getPickedPersonStats(name, probabilities, stats, candidates) {
+  if (!name) return null;
+  
+  const pickCount = stats[name] || 0;
+  
+  const sortedByProb = [...candidates].sort((a, b) => (probabilities[b] || 0) - (probabilities[a] || 0));
+  const rank = sortedByProb.indexOf(name) + 1;
+  const totalCandidates = candidates.length;
+  
+  const recentLimit = 100;
+  const recentPicks = state.history.slice(-recentLimit);
+  const recentCount = recentPicks.filter(h => h.name === name).length;
+  const totalCount = recentPicks.length + 1;
+  const actualRecentCount = recentCount + 1;
+  const recentProbability = actualRecentCount / totalCount;
+  
+  let consecutiveMisses = 0;
+  if (pickCount === 0) {
+    consecutiveMisses = state.history.length;
+  } else {
+    for (let i = state.history.length - 1; i >= 0; i--) {
+      if (state.history[i].name === name) {
+        break;
+      }
+      consecutiveMisses++;
+    }
+  }
+  
+  let luckLevel = 'normal';
+  let luckText = '正常概率';
+  if (recentProbability >= 0.3) {
+    luckLevel = 'high';
+    luckText = '高概率命中';
+  } else if (recentProbability >= 0.15) {
+    luckLevel = 'above-avg';
+    luckText = '概率较高';
+  } else if (recentProbability <= 0.03) {
+    luckLevel = 'miracle';
+    luckText = '奇迹发生';
+  } else if (recentProbability <= 0.08) {
+    luckLevel = 'lucky';
+    luckText = '锦鲤附体';
+  }
+  
+  if (consecutiveMisses >= 30) {
+    luckLevel = 'long-wait';
+    luckText = '守得云开';
+  } else if (consecutiveMisses >= 15) {
+    luckLevel = 'patience';
+    luckText = '终于轮到';
+  }
+  
+  return {
+    name,
+    probability: recentProbability,
+    probabilityPercent: (recentProbability * 100).toFixed(1),
+    pickCount,
+    recentCount: actualRecentCount,
+    recentLimit: totalCount,
+    consecutiveMisses,
+    rank,
+    totalCandidates,
+    luckLevel,
+    luckText
+  };
 }
 
 
@@ -145,6 +499,7 @@ const functions = {
         centerItems: [{ id: 'start-roll', text: '开始抽选', icon: 'ri-shuffle-line' }],
         leftItems: [
           { id: 'openSettings', text: '抽选设置', icon: 'ri-settings-3-line' },
+          { id: 'showProbabilities', text: '查看概率', icon: 'ri-pie-chart-line' },
           { id: 'openExternal', text: '外部抽选', icon: 'ri-external-link-line' }
         ],
         backgroundUrl: initBg,
@@ -166,15 +521,30 @@ const functions = {
           const unique = Array.from(new Set(names));
 
           const count = Math.max(1, state.pickCount || 1);
-          const actualCount = Math.min(count, unique.length); // 限制不超过总人数
+          const actualCount = Math.min(count, unique.length);
           const finalNames = [];
           const batchSet = new Set();
+
+          let pickedPersonStats = null;
           
           for (let k = 0; k < actualCount; k++) {
+            const fairInfoBeforePick = getFairPickInfo(batchSet);
+            
             const name = pickOne(batchSet);
             if (name) {
               finalNames.push(name);
               batchSet.add(name);
+              
+              if (k === 0 && fairInfoBeforePick && fairInfoBeforePick.candidates.length > 0) {
+                pickedPersonStats = getPickedPersonStats(
+                  name,
+                  fairInfoBeforePick.probabilities,
+                  fairInfoBeforePick.stats,
+                  fairInfoBeforePick.candidates
+                );
+              }
+              
+              saveHistory(name);
             }
           }
 
@@ -190,7 +560,7 @@ const functions = {
             try { seat = await functions._getSeatingContext(finalNames[0]); } catch (e) { seat = null; }
           }
 
-          try { pluginApi.emit(state.eventChannel, { type: 'animate.pick', names: seq, final: finalNames, stepMs: 40, seat }); } catch (e) { }
+          try { pluginApi.emit(state.eventChannel, { type: 'animate.pick', names: seq, final: finalNames, stepMs: 40, seat, pickedPersonStats }); } catch (e) { }
         }
       } else if (payload.type === 'config.count') {
         const c = parseInt(payload.count, 10);
@@ -198,12 +568,17 @@ const functions = {
       } else if (payload.type === 'left.click') {
         if (payload.id === 'openSettings') {
           emitUpdate('floatingBounds', 'left');
-          emitUpdate('floatingBounds', { width: 520, height: 360 });
+          emitUpdate('floatingBounds', { width: 520, height: 480 });
           const u = new URL(state.floatSettingsBase);
           u.searchParams.set('channel', state.eventChannel);
           u.searchParams.set('caller', 'rollcall-random');
           u.searchParams.set('noRepeat', state.noRepeat ? '1' : '0');
           u.searchParams.set('recentLimit', String(state.recentLimit || 20));
+          u.searchParams.set('fairMode', state.fairMode ? '1' : '0');
+          u.searchParams.set('genderBalance', state.genderBalance ? '1' : '0');
+          u.searchParams.set('coldStartWeight', String(state.coldStartWeight || 1.5));
+          u.searchParams.set('maxGapThreshold', String(state.maxGapThreshold || 3));
+          u.searchParams.set('minCandidatePool', String(state.minCandidatePool || 3));
           emitUpdate('floatingUrl', u.href);
         } else if (payload.id === 'openExternal') {
           emitUpdate('floatingBounds', 'left');
@@ -212,6 +587,15 @@ const functions = {
           const u = new URL(url.pathToFileURL(extFile).href);
           u.searchParams.set('channel', state.eventChannel);
           u.searchParams.set('caller', 'rollcall-random');
+          emitUpdate('floatingUrl', u.href);
+        } else if (payload.id === 'showProbabilities') {
+          await ensureStudents();
+          const probFile = path.join(__dirname, 'float', 'probabilities.html');
+          const u = new URL(url.pathToFileURL(probFile).href);
+          u.searchParams.set('channel', state.eventChannel);
+          u.searchParams.set('caller', 'rollcall-random');
+          emitUpdate('floatingBounds', 'center');
+          emitUpdate('floatingBounds', { width: 640, height: 520 });
           emitUpdate('floatingUrl', u.href);
         }
       } else if (payload.type === 'float.settings') {
@@ -224,6 +608,29 @@ const functions = {
           if (state.recent.length > state.recentLimit) state.recent = state.recent.slice(-state.recentLimit);
         }
         if (payload.resetPicked) { state.recent = []; state.picked.clear(); state.currentName = ''; }
+
+        if (typeof payload.fairMode === 'boolean') state.fairMode = payload.fairMode;
+        if (typeof payload.genderBalance === 'boolean') state.genderBalance = payload.genderBalance;
+        const csw = Number(payload.coldStartWeight);
+        if (Number.isFinite(csw)) state.coldStartWeight = Math.max(1, Math.min(3, csw));
+        const mgt = Number(payload.maxGapThreshold);
+        if (Number.isFinite(mgt)) state.maxGapThreshold = Math.max(1, Math.min(10, mgt));
+        const mcp = Number(payload.minCandidatePool);
+        if (Number.isFinite(mcp)) state.minCandidatePool = Math.max(1, Math.min(20, mcp));
+
+        try {
+          pluginApi.store.set('fairSettings', {
+            fairMode: state.fairMode,
+            genderBalance: state.genderBalance,
+            coldStartWeight: state.coldStartWeight,
+            maxGapThreshold: state.maxGapThreshold,
+            minCandidatePool: state.minCandidatePool
+          });
+        } catch (e) { }
+      } else if (payload.type === 'getProbabilities') {
+        await ensureStudents();
+        const info = getFairPickInfo();
+        return { ok: true, ...info };
       }
       return true;
     } catch (e) { return { ok: false, error: e?.message || String(e) }; }
@@ -266,15 +673,18 @@ const functions = {
       await shell.openExternal(targetUrl);
       return { ok: true };
     } catch (e) { return { ok: false, error: e?.message }; }
+  },
+  getFairPickInfo: async () => {
+    await ensureStudents();
+    return getFairPickInfo();
   }
 
 };
 
-// 供预加载 quickAPI 调用的窗口控制函数
-
 const init = async (api) => {
   pluginApi = api;
   loadHistory();
+  loadFairSettings();
 };
 
-module.exports = { name: '随机点名', version: '0.1.0', init, functions: { ...functions, getVariable: async (name) => { const k = String(name || ''); if (k === 'currentName') return String(state.currentName || ''); return ''; }, listVariables: () => ['currentName'] } };
+module.exports = { name: '随机点名', version: '0.2.0', init, functions: { ...functions, getVariable: async (name) => { const k = String(name || ''); if (k === 'currentName') return String(state.currentName || ''); return ''; }, listVariables: () => ['currentName'] } };

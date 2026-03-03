@@ -1,10 +1,10 @@
 {
   "id": "rollcall-random",
   "name": "随机抽选",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "OrbiBoard",
   "icon": "ri-shuffle-line",
-  "description": "使用 UI模板-底栏应用 的随机点名插件，支持悬浮窗设置与快速调起",
+  "description": "使用 UI模板-底栏应用 的随机点名插件，支持悬浮窗设置与快速调起。新增智能动态权重算法，确保公平抽取。",
   "actions": [
     {
       "id": "openRollcall",

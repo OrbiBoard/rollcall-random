@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>抽取概率</title>
+    <link rel="stylesheet" href="../../../renderer/remixicon-local.css" />
+    <style>
+      :root {
+        --bg: #121621;
+        --fg: #ededed;
+        --muted: #94a3b8;
+        --accent: #238f4a;
+        --panel: rgba(255, 255, 255, 0.04);
+        --item-bg: rgba(255, 255, 255, 0.04);
+        --border: rgba(255, 255, 255, 0.12);
+        --accent-rgb: 35, 143, 74;
+        --bg-modal: #1b1f2a;
+        --scrollbar-bg: rgba(255, 255, 255, 0.05);
+        --scrollbar-thumb: rgba(255, 255, 255, 0.2);
+      }
+      
+      html, body { height: 100%; overflow: hidden; }
+      
+      body { 
+        margin: 0; padding: 16px; 
+        color: var(--fg); 
+        background: var(--bg-modal); 
+        transition: background 0.3s, color 0.3s; 
+        font-family: "Microsoft YaHei", sans-serif; 
+        box-sizing: border-box;
+      }
+      
+      .scroll-container {
+        height: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+      
+      .scroll-container::-webkit-scrollbar {
+        width: 8px;
+      }
+      .scroll-container::-webkit-scrollbar-track {
+        background: var(--scrollbar-bg);
+        border-radius: 4px;
+      }
+      .scroll-container::-webkit-scrollbar-thumb {
+        background: var(--scrollbar-thumb);
+        border-radius: 4px;
+      }
+      .scroll-container::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+      
+      .title { font-size: 18px; font-weight: 600; display:flex; align-items:center; gap:8px; margin-bottom: 12px; }
+      .card { padding: 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); }
+      
+      .stats-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 8px; }
+      .stats-header .label { font-size: 13px; color: var(--muted); }
+      .stats-header .value { font-size: 16px; font-weight: 600; color: var(--accent); }
+      
+      .prob-list { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; padding-right: 4px; }
+      
+      .prob-list::-webkit-scrollbar {
+        width: 6px;
+      }
+      .prob-list::-webkit-scrollbar-track {
+        background: var(--scrollbar-bg);
+        border-radius: 3px;
+      }
+      .prob-list::-webkit-scrollbar-thumb {
+        background: var(--scrollbar-thumb);
+        border-radius: 3px;
+      }
+      .prob-list::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+      .prob-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 8px; background: var(--item-bg); transition: background 0.2s; }
+      .prob-item:hover { background: rgba(var(--accent-rgb), 0.1); }
+      
+      .prob-item .rank { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; background: var(--border); color: var(--fg); }
+      .prob-item .rank.top-3 { background: var(--accent); color: #fff; }
+      
+      .prob-item .name { flex: 1; font-weight: 500; }
+      .prob-item .gender { font-size: 12px; padding: 2px 6px; border-radius: 4px; background: var(--border); color: var(--muted); }
+      .prob-item .gender.male { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+      .prob-item .gender.female { background: rgba(236, 72, 153, 0.2); color: #f472b6; }
+      
+      .prob-item .count { font-size: 13px; color: var(--muted); min-width: 60px; text-align: right; }
+      
+      .prob-item .prob-bar-container { width: 100px; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+      .prob-item .prob-bar { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s; }
+      
+      .prob-item .prob-value { min-width: 50px; text-align: right; font-weight: 600; font-size: 14px; color: var(--accent); }
+      
+      .legend { display: flex; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+      .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+      .legend-item .dot { width: 10px; height: 10px; border-radius: 50%; }
+      .legend-item .dot.high { background: var(--accent); }
+      .legend-item .dot.low { background: var(--border); }
+      
+      .empty-state { text-align: center; padding: 32px; color: var(--muted); }
+      .empty-state i { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+      
+      .muted { color: var(--muted); font-size: 12px; }
+      
+      .refresh-btn { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--item-bg); color: var(--fg); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; transition: all .15s ease; }
+      .refresh-btn:hover { filter: brightness(1.1); }
+    </style>
+  </head>
+  <body>
+    <div class="scroll-container">
+    <div class="title"><i class="ri-pie-chart-line"></i> 抽取概率分布</div>
+    
+    <div class="card">
+      <div class="stats-header">
+        <div>
+          <div class="label">候选池人数</div>
+          <div class="value" id="pool-count">-</div>
+        </div>
+        <div>
+          <div class="label">平均抽取次数</div>
+          <div class="value" id="avg-count">-</div>
+        </div>
+        <div>
+          <div class="label">最大差距</div>
+          <div class="value" id="max-gap">-</div>
+        </div>
+        <button class="refresh-btn" onclick="loadData()"><i class="ri-refresh-line"></i> 刷新</button>
+      </div>
+      
+      <div id="prob-list" class="prob-list">
+        <div class="empty-state">
+          <i class="ri-loader-4-line"></i>
+          <div>加载中...</div>
+        </div>
+      </div>
+      
+      <div class="legend">
+        <div class="legend-item"><div class="dot high"></div><span>高概率（抽取次数少）</span></div>
+        <div class="legend-item"><div class="dot low"></div><span>低概率（抽取次数多）</span></div>
+      </div>
+    </div>
+    
+    <div class="muted" style="margin-top: 8px;">概率基于智能动态权重算法实时计算</div>
+    </div>
+    <script>
+      let channel = '';
+      let caller = '';
+      
+      window.applyTheme = (mode, color) => {
+        const root = document.documentElement;
+        const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        
+        const accent = color || '#238f4a';
+        root.style.setProperty('--accent', accent);
+        
+        const hex = accent.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        root.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
+        
+        if (isDark) {
+          root.style.setProperty('--bg', '#121621');
+          root.style.setProperty('--fg', '#ededed');
+          root.style.setProperty('--muted', '#94a3b8');
+          root.style.setProperty('--panel', 'rgba(255, 255, 255, 0.04)');
+          root.style.setProperty('--item-bg', 'rgba(255, 255, 255, 0.04)');
+          root.style.setProperty('--border', 'rgba(255, 255, 255, 0.12)');
+          root.style.setProperty('--bg-modal', '#1b1f2a');
+          root.style.setProperty('--scrollbar-bg', 'rgba(255, 255, 255, 0.05)');
+          root.style.setProperty('--scrollbar-thumb', 'rgba(255, 255, 255, 0.2)');
+        } else {
+          root.style.setProperty('--bg', '#f3f4f6');
+          root.style.setProperty('--fg', '#1f2937');
+          root.style.setProperty('--muted', '#6b7280');
+          root.style.setProperty('--panel', '#ffffff');
+          root.style.setProperty('--item-bg', '#f9fafb');
+          root.style.setProperty('--border', '#e5e7eb');
+          root.style.setProperty('--bg-modal', '#ffffff');
+          root.style.setProperty('--scrollbar-bg', 'rgba(0, 0, 0, 0.05)');
+          root.style.setProperty('--scrollbar-thumb', 'rgba(0, 0, 0, 0.2)');
+        }
+      };
+
+      let currentThemeMode = 'system';
+      let currentThemeColor = '#238f4a';
+
+      (async () => {
+        try {
+          if (window.lowbarAPI?.configGet) {
+            currentThemeMode = await window.lowbarAPI.configGet('system', 'themeMode') || 'system';
+            currentThemeColor = await window.lowbarAPI.configGet('system', 'themeColor') || '#238f4a';
+            window.applyTheme(currentThemeMode, currentThemeColor);
+          }
+          
+          if (window.lowbarAPI?.onConfigChanged) {
+            window.lowbarAPI.onConfigChanged(({ scope, key, value }) => {
+              if (scope === 'system') {
+                if (key === 'themeMode') currentThemeMode = value || 'system';
+                if (key === 'themeColor') currentThemeColor = value || '#238f4a';
+                window.applyTheme(currentThemeMode, currentThemeColor);
+              }
+            });
+          }
+        } catch(e) {}
+      })();
+
+      function readInit() { 
+        try { 
+          const u = new URL(window.location.href); 
+          channel = String(u.searchParams.get('channel') || ''); 
+          caller = String(u.searchParams.get('caller') || ''); 
+        } catch (e) {} 
+      }
+      
+      async function loadData() {
+        const listEl = document.getElementById('prob-list');
+        listEl.innerHTML = '<div class="empty-state"><i class="ri-loader-4-line"></i><div>加载中...</div></div>';
+        
+        try {
+          let result;
+          if (caller && window.lowbarAPI?.pluginCall) {
+            result = await window.lowbarAPI.pluginCall(caller, 'onLowbarEvent', [{ type: 'getProbabilities' }]);
+          } else {
+            result = await window.lowbarAPI?.emitEvent?.(channel, { type: 'getProbabilities' });
+          }
+          
+          if (!result || !result.result.candidates) {
+            throw new Error('No data');
+          }
+          
+          renderData(result.result);
+        } catch (e) {
+          listEl.innerHTML = '<div class="empty-state"><i class="ri-error-warning-line"></i><div>无法加载数据，请确保已添加学生</div></div>';
+        }
+      }
+      
+      function renderData(data) {
+        const { candidates, probabilities, stats, avgCount } = data;
+        
+        const counts = Object.values(stats);
+        const minCount = counts.length > 0 ? Math.min(...counts) : 0;
+        const maxCount = counts.length > 0 ? Math.max(...counts) : 0;
+        const maxGap = maxCount - minCount;
+        
+        document.getElementById('pool-count').textContent = candidates.length;
+        document.getElementById('avg-count').textContent = avgCount.toFixed(2);
+        document.getElementById('max-gap').textContent = maxGap;
+        
+        const listEl = document.getElementById('prob-list');
+        
+        if (candidates.length === 0) {
+          listEl.innerHTML = '<div class="empty-state"><i class="ri-user-search-line"></i><div>暂无候选成员</div></div>';
+          return;
+        }
+        
+        const sortedCandidates = [...candidates].sort((a, b) => (probabilities[b] || 0) - (probabilities[a] || 0));
+        const maxProb = Math.max(...Object.values(probabilities));
+        
+        let html = '';
+        sortedCandidates.forEach((name, idx) => {
+          const prob = probabilities[name] || 0;
+          const count = stats[name] || 0;
+          const barWidth = maxProb > 0 ? (prob / maxProb * 100) : 0;
+          const isTop3 = idx < 3;
+          
+          const genderClass = '';
+          const genderText = '';
+          
+          html += `
+            <div class="prob-item">
+              <div class="rank ${isTop3 ? 'top-3' : ''}">${idx + 1}</div>
+              <div class="name">${name}</div>
+              <div class="count">${count} 次</div>
+              <div class="prob-bar-container">
+                <div class="prob-bar" style="width: ${barWidth}%"></div>
+              </div>
+              <div class="prob-value">${(prob * 100).toFixed(1)}%</div>
+            </div>
+          `;
+        });
+        
+        listEl.innerHTML = html;
+      }
+      
+      readInit();
+      loadData();
+    </script>
+  </body>
+</html>

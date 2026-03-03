@@ -17,14 +17,49 @@
         --border: rgba(255, 255, 255, 0.12);
         --accent-rgb: 35, 143, 74;
         --bg-modal: #1b1f2a;
+        --scrollbar-bg: rgba(255, 255, 255, 0.05);
+        --scrollbar-thumb: rgba(255, 255, 255, 0.2);
       }
-      body { margin: 0; padding: 16px; color: var(--fg); background: var(--bg-modal); transition: background 0.3s, color 0.3s; }
+      
+      html, body { height: 100%; overflow: hidden; }
+      
+      body { 
+        margin: 0; padding: 16px; 
+        color: var(--fg); 
+        background: var(--bg-modal); 
+        transition: background 0.3s, color 0.3s; 
+        font-family: "Microsoft YaHei", sans-serif; 
+        box-sizing: border-box;
+      }
+      
+      .scroll-container {
+        height: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding-right: 4px;
+      }
+      
+      .scroll-container::-webkit-scrollbar {
+        width: 8px;
+      }
+      .scroll-container::-webkit-scrollbar-track {
+        background: var(--scrollbar-bg);
+        border-radius: 4px;
+      }
+      .scroll-container::-webkit-scrollbar-thumb {
+        background: var(--scrollbar-thumb);
+        border-radius: 4px;
+      }
+      .scroll-container::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
       .title { font-size: 18px; font-weight: 600; display:flex; align-items:center; gap:8px; }
       .card { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); }
+      .card-title { font-size: 14px; font-weight: 600; color: var(--accent); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
       .row { display:flex; align-items:center; justify-content: space-between; gap:12px; padding: 8px 0; }
       .row label { display:flex; align-items:center; gap:8px; cursor: pointer; }
       .row .hint { color: var(--muted); font-size: 12px; }
-      .btns { display:flex; gap:8px; margin-top: 12px; }
+      .btns { display:flex; gap:8px; margin-top: 12px; flex-wrap: wrap; }
       
       button { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--item-bg); color: var(--fg); transition: all .15s ease; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
       
@@ -37,16 +72,35 @@
       button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
       
       .field { display:flex; align-items:center; gap:8px; }
-      .field input[type="number"] { width: 88px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--item-bg); color: var(--fg); outline: none; }
+      .field input[type="number"] { width: 72px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--item-bg); color: var(--fg); outline: none; font-size: 14px; }
       .field input[type="number"]:focus { border-color: var(--accent); }
       
       .muted { color: var(--muted); }
       .bg-icon { position: fixed; right: 12px; bottom: 8px; font-size: 72px; color: var(--fg); opacity: 0.05; pointer-events: none; }
+      
+      .divider { height: 1px; background: var(--border); margin: 12px 0; }
+      
+      .toggle-switch { position: relative; width: 44px; height: 24px; }
+      .toggle-switch input { opacity: 0; width: 0; height: 0; }
+      .toggle-slider { position: absolute; cursor: pointer; inset: 0; background-color: var(--border); transition: .3s; border-radius: 24px; }
+      .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: var(--fg); transition: .3s; border-radius: 50%; }
+      .toggle-switch input:checked + .toggle-slider { background-color: var(--accent); }
+      .toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); }
+      
+      .info-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 12px; background: rgba(var(--accent-rgb), 0.15); color: var(--accent); font-size: 11px; font-weight: 600; }
+      
+      .range-row { flex-direction: column; align-items: flex-start; gap: 4px; }
+      .range-row .range-header { display: flex; justify-content: space-between; width: 100%; align-items: center; }
+      .range-row input[type="range"] { width: 100%; height: 6px; border-radius: 3px; background: var(--border); outline: none; -webkit-appearance: none; }
+      .range-row input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; }
     </style>
   </head>
   <body>
+    <div class="scroll-container">
     <div class="title"><i class="ri-settings-3-line"></i> 抽选设置</div>
+    
     <div class="card">
+      <div class="card-title"><i class="ri-shuffle-line"></i> 基础设置</div>
       <div class="row">
         <label><input id="chk-norepeat" type="checkbox" /> 抽选不重复</label>
         <div class="hint">排除最近抽取的若干同学</div>
@@ -55,17 +109,77 @@
         <div class="field"><span>排除最近次数</span><input id="inp-recent-limit" type="number" min="1" max="100" step="1" /></div>
         <div class="hint">默认 20，范围 1-100</div>
       </div>
-      <div class="btns">
-        <button id="btn-save" class="primary"><i class="ri-save-3-line"></i> 保存设置</button>
-        <button id="btn-reset" class="danger"><i class="ri-restart-line"></i> 清空已抽名单</button>
-      </div>
-      <div class="muted" style="margin-top:8px;">学生数据来源：档案-学生列表（profiles-students）</div>
     </div>
-    <div class="bg-icon"><i class="ri-shuffle-line"></i></div>
-    <script>
-      let channel = ''; let caller = ''; let initNoRepeat = '1'; let initRecentLimit = '20';
+    
+    <div class="card">
+      <div class="card-title"><i class="ri-scales-3-line"></i> 公平性设置 <span class="info-badge">智能权重</span></div>
+      <div class="row">
+        <label>启用公平模式</label>
+        <label class="toggle-switch">
+          <input id="chk-fair-mode" type="checkbox" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="hint" style="margin-top: -4px; margin-bottom: 8px;">基于历史抽取次数动态调整权重，确保公平</div>
       
-      // 注入主题逻辑
+      <div class="divider"></div>
+      
+      <div class="row">
+        <label>性别均衡</label>
+        <label class="toggle-switch">
+          <input id="chk-gender-balance" type="checkbox" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="hint" style="margin-top: -4px; margin-bottom: 8px;">自动平衡男女生的抽取概率</div>
+      
+      <div class="divider"></div>
+      
+      <div class="row range-row">
+        <div class="range-header">
+          <span>冷启动权重</span>
+          <span id="val-cold-start" style="color: var(--accent); font-weight: 600;">1.5</span>
+        </div>
+        <input id="rng-cold-start" type="range" min="1" max="3" step="0.1" value="1.5" />
+        <div class="hint">从未被抽中的成员获得额外权重加成</div>
+      </div>
+      
+      <div class="divider"></div>
+      
+      <div class="row range-row">
+        <div class="range-header">
+          <span>最大差距阈值</span>
+          <span id="val-max-gap" style="color: var(--accent); font-weight: 600;">3</span>
+        </div>
+        <input id="rng-max-gap" type="range" min="1" max="10" step="1" value="3" />
+        <div class="hint">当最大与最小抽取次数差距超过此值时，排除极值</div>
+      </div>
+      
+      <div class="divider"></div>
+      
+      <div class="row range-row">
+        <div class="range-header">
+          <span>最小候选池</span>
+          <span id="val-min-pool" style="color: var(--accent); font-weight: 600;">3</span>
+        </div>
+        <input id="rng-min-pool" type="range" min="1" max="20" step="1" value="3" />
+        <div class="hint">确保候选池不小于此人数</div>
+      </div>
+    </div>
+    
+    <div class="btns">
+      <button id="btn-save" class="primary"><i class="ri-save-3-line"></i> 保存设置</button>
+      <button id="btn-reset" class="danger"><i class="ri-restart-line"></i> 清空已抽名单</button>
+    </div>
+    <div class="muted" style="margin-top:8px;">学生数据来源：档案-学生列表（profiles-students）</div>
+    <div class="bg-icon"><i class="ri-shuffle-line"></i></div>
+    </div>
+    <script>
+      let channel = ''; let caller = ''; 
+      let initNoRepeat = '1'; let initRecentLimit = '20';
+      let initFairMode = '1'; let initGenderBalance = '0';
+      let initColdStartWeight = '1.5'; let initMaxGapThreshold = '3'; let initMinCandidatePool = '3';
+      
       window.applyTheme = (mode, color) => {
         const root = document.documentElement;
         const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -87,6 +201,8 @@
           root.style.setProperty('--item-bg', 'rgba(255, 255, 255, 0.04)');
           root.style.setProperty('--border', 'rgba(255, 255, 255, 0.12)');
           root.style.setProperty('--bg-modal', '#1b1f2a');
+          root.style.setProperty('--scrollbar-bg', 'rgba(255, 255, 255, 0.05)');
+          root.style.setProperty('--scrollbar-thumb', 'rgba(255, 255, 255, 0.2)');
         } else {
           root.style.setProperty('--bg', '#f3f4f6');
           root.style.setProperty('--fg', '#1f2937');
@@ -95,36 +211,112 @@
           root.style.setProperty('--item-bg', '#f9fafb');
           root.style.setProperty('--border', '#e5e7eb');
           root.style.setProperty('--bg-modal', '#ffffff');
+          root.style.setProperty('--scrollbar-bg', 'rgba(0, 0, 0, 0.05)');
+          root.style.setProperty('--scrollbar-thumb', 'rgba(0, 0, 0, 0.2)');
         }
       };
 
+      let currentThemeMode = 'system';
+      let currentThemeColor = '#238f4a';
+
       (async () => {
         try {
-          // 尝试获取主题配置
           if (window.lowbarAPI?.configGet) {
-            const mode = await window.lowbarAPI.configGet('system', 'themeMode') || 'system';
-            const color = await window.lowbarAPI.configGet('system', 'themeColor') || '#238f4a';
-            window.applyTheme(mode, color);
+            currentThemeMode = await window.lowbarAPI.configGet('system', 'themeMode') || 'system';
+            currentThemeColor = await window.lowbarAPI.configGet('system', 'themeColor') || '#238f4a';
+            window.applyTheme(currentThemeMode, currentThemeColor);
           }
           
           if (window.lowbarAPI?.onConfigChanged) {
-            window.lowbarAPI.onConfigChanged(({ scope, key, value }) => {
+            window.lowbarAPI.onConfigChanged(async ({ scope, key, value }) => {
               if (scope === 'system') {
-                // 重新获取或局部更新，这里简化处理，直接获取最新状态
-                // 实际应该存储状态
+                currentThemeMode = await window.lowbarAPI.configGet('system', 'themeMode') || 'system';
+                currentThemeColor = await window.lowbarAPI.configGet('system', 'themeColor') || '#238f4a';
+                window.applyTheme(currentThemeMode, currentThemeColor);
+              }
+            });
+          }
+
+          if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => {
+              const m = await window.lowbarAPI?.configGet('system', 'themeMode') || 'system';
+              if (m === 'system') {
+                const c = await window.lowbarAPI?.configGet('system', 'themeColor') || '#238f4a';
+                window.applyTheme('system', c);
               }
             });
           }
         } catch(e) {}
       })();
 
-      function readInit() { try { const u = new URL(window.location.href); channel=String(u.searchParams.get('channel')||''); caller=String(u.searchParams.get('caller')||''); initNoRepeat=String(u.searchParams.get('noRepeat')||'1'); initRecentLimit=String(u.searchParams.get('recentLimit')||'20'); } catch (e) {} }
-      function initUi() { const chk = document.getElementById('chk-norepeat'); chk.checked = (initNoRepeat==='1'); const inp = document.getElementById('inp-recent-limit'); inp.value = initRecentLimit || '20'; }
+      function readInit() { 
+        try { 
+          const u = new URL(window.location.href); 
+          channel=String(u.searchParams.get('channel')||''); 
+          caller=String(u.searchParams.get('caller')||''); 
+          initNoRepeat=String(u.searchParams.get('noRepeat')||'1'); 
+          initRecentLimit=String(u.searchParams.get('recentLimit')||'20');
+          initFairMode=String(u.searchParams.get('fairMode')||'1');
+          initGenderBalance=String(u.searchParams.get('genderBalance')||'0');
+          initColdStartWeight=String(u.searchParams.get('coldStartWeight')||'1.5');
+          initMaxGapThreshold=String(u.searchParams.get('maxGapThreshold')||'3');
+          initMinCandidatePool=String(u.searchParams.get('minCandidatePool')||'3');
+        } catch (e) {} 
+      }
+      
+      function initUi() { 
+        document.getElementById('chk-norepeat').checked = (initNoRepeat==='1'); 
+        document.getElementById('inp-recent-limit').value = initRecentLimit || '20';
+        
+        document.getElementById('chk-fair-mode').checked = (initFairMode === '1');
+        document.getElementById('chk-gender-balance').checked = (initGenderBalance === '1');
+        
+        const coldStart = parseFloat(initColdStartWeight) || 1.5;
+        document.getElementById('rng-cold-start').value = coldStart;
+        document.getElementById('val-cold-start').textContent = coldStart.toFixed(1);
+        
+        const maxGap = parseInt(initMaxGapThreshold) || 3;
+        document.getElementById('rng-max-gap').value = maxGap;
+        document.getElementById('val-max-gap').textContent = maxGap;
+        
+        const minPool = parseInt(initMinCandidatePool) || 3;
+        document.getElementById('rng-min-pool').value = minPool;
+        document.getElementById('val-min-pool').textContent = minPool;
+      }
+      
+      function setupRangeListeners() {
+        document.getElementById('rng-cold-start').addEventListener('input', (e) => {
+          document.getElementById('val-cold-start').textContent = parseFloat(e.target.value).toFixed(1);
+        });
+        document.getElementById('rng-max-gap').addEventListener('input', (e) => {
+          document.getElementById('val-max-gap').textContent = e.target.value;
+        });
+        document.getElementById('rng-min-pool').addEventListener('input', (e) => {
+          document.getElementById('val-min-pool').textContent = e.target.value;
+        });
+      }
+      
       async function save() { 
         const v = document.getElementById('chk-norepeat').checked ? '1' : '0'; 
         const k = Number(document.getElementById('inp-recent-limit').value || '20'); 
-        const recentLimit = Math.max(1, Math.min(100, Math.floor(Number.isFinite(k)?k:20))); 
-        const payload = { type:'float.settings', noRepeat: v, recentLimit };
+        const recentLimit = Math.max(1, Math.min(100, Math.floor(Number.isFinite(k)?k:20)));
+        
+        const fairMode = document.getElementById('chk-fair-mode').checked;
+        const genderBalance = document.getElementById('chk-gender-balance').checked;
+        const coldStartWeight = parseFloat(document.getElementById('rng-cold-start').value) || 1.5;
+        const maxGapThreshold = parseInt(document.getElementById('rng-max-gap').value) || 3;
+        const minCandidatePool = parseInt(document.getElementById('rng-min-pool').value) || 3;
+        
+        const payload = { 
+          type:'float.settings', 
+          noRepeat: v, 
+          recentLimit,
+          fairMode,
+          genderBalance,
+          coldStartWeight,
+          maxGapThreshold,
+          minCandidatePool
+        };
         try { 
           if (caller && window.lowbarAPI?.pluginCall) {
             await window.lowbarAPI.pluginCall(caller, 'onLowbarEvent', [payload]);
@@ -133,6 +325,7 @@
           }
         } catch (e) {} 
       }
+      
       async function resetPicked() { 
         const payload = { type:'float.settings', resetPicked: true };
         try { 
@@ -143,9 +336,12 @@
           }
         } catch (e) {} 
       }
+      
       document.getElementById('btn-save').addEventListener('click', save);
       document.getElementById('btn-reset').addEventListener('click', resetPicked);
-      readInit(); initUi();
+      readInit(); 
+      initUi();
+      setupRangeListeners();
     </script>
   </body>
-  </html>
+</html>

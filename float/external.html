@@ -89,18 +89,33 @@
         }
       };
 
+      let currentThemeMode = 'system';
+      let currentThemeColor = '#238f4a';
+
       (async () => {
         try {
           if (window.lowbarAPI?.configGet) {
-            const mode = await window.lowbarAPI.configGet('system', 'themeMode') || 'system';
-            const color = await window.lowbarAPI.configGet('system', 'themeColor') || '#238f4a';
-            window.applyTheme(mode, color);
+            currentThemeMode = await window.lowbarAPI.configGet('system', 'themeMode') || 'system';
+            currentThemeColor = await window.lowbarAPI.configGet('system', 'themeColor') || '#238f4a';
+            window.applyTheme(currentThemeMode, currentThemeColor);
           }
           
           if (window.lowbarAPI?.onConfigChanged) {
-            window.lowbarAPI.onConfigChanged(({ scope, key, value }) => {
+            window.lowbarAPI.onConfigChanged(async ({ scope, key, value }) => {
               if (scope === 'system') {
-                 // 自动更新
+                currentThemeMode = await window.lowbarAPI.configGet('system', 'themeMode') || 'system';
+                currentThemeColor = await window.lowbarAPI.configGet('system', 'themeColor') || '#238f4a';
+                window.applyTheme(currentThemeMode, currentThemeColor);
+              }
+            });
+          }
+
+          if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => {
+              const m = await window.lowbarAPI?.configGet('system', 'themeMode') || 'system';
+              if (m === 'system') {
+                const c = await window.lowbarAPI?.configGet('system', 'themeColor') || '#238f4a';
+                window.applyTheme('system', c);
               }
             });
           }
